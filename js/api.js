@@ -87,10 +87,10 @@ export async function saveApiKey(modelKey, apiKey) {
         const success = await apiKeyManager.saveApiKey(modelKey, apiKey);
         
         if (success) {
-            console.log(`🔐 API 키 저장 완료:`, {
-                modelKey,
+        console.log(`🔐 API 키 저장 완료:`, {
+            modelKey,
                 keyLength: apiKey.length
-            });
+        });
         }
     }
 }

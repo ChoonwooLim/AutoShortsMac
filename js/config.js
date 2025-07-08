@@ -508,7 +508,7 @@ export const apiKeyManager = {
         
         return { valid: true, message: '유효한 API 키 형식입니다' };
     }
-};
+}; 
 
 // 전역으로 사용할 수 있도록 설정
 window.apiKeyManager = apiKeyManager; 

@@ -172,9 +172,9 @@ export function setupFileEventListeners() {
         });
     }
     if (DOM.playbackSpeedSelect) {
-        DOM.playbackSpeedSelect.addEventListener('change', (e) => {
+    DOM.playbackSpeedSelect.addEventListener('change', (e) => {
             if (DOM.videoPreview) DOM.videoPreview.playbackRate = parseFloat(e.target.value);
-        });
+    });
     }
 
     // 프로그레스 바 클릭 이벤트
@@ -203,10 +203,10 @@ export function setupFileEventListeners() {
 
     // 새 영상 로드 버튼 - null 체크 추가
     if (DOM.loadNewVideoButton) {
-        DOM.loadNewVideoButton.addEventListener('click', (e) => {
-            console.log('📁 새 영상 로드 버튼 클릭됨');
-            DOM.fileInput.click();
-        });
+    DOM.loadNewVideoButton.addEventListener('click', (e) => {
+        console.log('📁 새 영상 로드 버튼 클릭됨');
+        DOM.fileInput.click();
+    });
     } else {
         console.warn('⚠️ loadNewVideoButton 요소를 찾을 수 없습니다');
     }
