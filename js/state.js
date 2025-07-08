@@ -6,6 +6,12 @@ export const state = {
     uploadedFile: null,
 
     /** @type {Array<object>} */
+    subtitles: [],
+
+    /** @type {Array<object>} */
+    faceResults: [],
+    
+    /** @type {Array<object>} */
     chats: [],
 
     /** @type {string | null} */

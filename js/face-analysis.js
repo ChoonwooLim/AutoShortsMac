@@ -33,6 +33,22 @@ function updateProgressBar(progress, text) {
     DOM.faceProgressText.textContent = text || `${Math.round(progress * 100)}%`;
 }
 
+// Add event listener for face data generation
+function onFaceDataGenerated(faceData) {
+    console.log('Face data generated:', faceData);
+    // Call AI model for analysis
+    analyzeFaceDataWithAI(faceData);
+}
+
+// Example function to analyze face data with AI
+function analyzeFaceDataWithAI(faceData) {
+    // Simple AI analysis logic
+    console.log('Analyzing face data with AI:', faceData);
+    // Example: Count faces
+    const faceCount = faceData.length;
+    console.log('Number of faces:', faceCount);
+}
+
 function displayActorResults(actors) {
     const actorList = DOM.faceResults;
     actorList.innerHTML = '';
@@ -65,6 +81,7 @@ function displayActorResults(actors) {
         `;
         actorList.appendChild(card);
     });
+    onFaceDataGenerated(actors);
 }
 
 function generateActorInfo(groups) {

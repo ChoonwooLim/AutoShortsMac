@@ -117,6 +117,23 @@ function addSubtitleEntry(text, source) {
         
         console.log('✅ 자막 결과가 하단 영역에 추가되었습니다');
     }
+    onSubtitleGenerated(text);
+}
+
+// Add event listener for subtitle generation
+function onSubtitleGenerated(subtitle) {
+    console.log('Subtitle generated:', subtitle);
+    // Call AI model for analysis
+    analyzeSubtitleWithAI(subtitle);
+}
+
+// Example function to analyze subtitle with AI
+function analyzeSubtitleWithAI(subtitle) {
+    // Simple AI analysis logic
+    console.log('Analyzing subtitle with AI:', subtitle);
+    // Example: Count words
+    const wordCount = subtitle.split(' ').length;
+    console.log('Word count:', wordCount);
 }
 
 // 🔄 리팩토링: UIUtils 사용으로 간소화된 프로그레스바 함수들
@@ -1336,71 +1353,133 @@ function blobToBase64(blob) {
 // 타임스탬프 포맷팅 함수
 function formatTimestamp(seconds) {
     const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    const secs = Math.floor(seconds % 60);
+    const millis = Math.round((seconds - Math.floor(seconds)) * 100);
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${millis.toString().padStart(2, '0')}`;
 }
 
-// 타임스탬프가 포함된 자막 항목 추가
+/**
+ * 타임스탬프가 있는 자막 세그먼트를 UI에 추가하고 전역 상태에 저장합니다.
+ * @param {Array<object>} segments - 자막 세그먼트 배열. 각 객체는 start, end, text 속성을 가집니다.
+ * @param {string} source - 자막 출처 (예: 'OpenAI Whisper')
+ */
 function addSubtitleEntryWithTimestamp(segments, source) {
-    const subtitleContainer = document.querySelector('.subtitle-results-container');
-    if (!subtitleContainer) return;
+    if (!segments || segments.length === 0) {
+        console.warn('⚠️ 타임스탬프 자막 세그먼트가 비어있습니다.');
+        return;
+    }
 
+    // 1. 전역 상태(state)에 자막 데이터 저장
+    //    구조: [{ start: 0.0, end: 3.5, text: "안녕하세요" }, ...]
+    state.subtitles = segments.map(seg => ({
+        start: parseFloat(seg.start),
+        end: parseFloat(seg.end),
+        text: seg.text.trim()
+    }));
+    
+    console.log(`✅ 전역 상태에 자막 저장 완료: ${state.subtitles.length}개 세그먼트`);
+    // workLogManager.addWorkLog('transcription', '자막 상태 저장', { count: state.subtitles.length, source });
+
+
+    // 2. UI 업데이트 (기존 로직)
+    const subtitleResultsContainer = document.getElementById('subtitleResultsContainer');
+    if (!subtitleResultsContainer) {
+        console.error('❌ 자막 결과 컨테이너(#subtitleResultsContainer)를 찾을 수 없습니다.');
+        return;
+    }
+    
     // 플레이스홀더 제거
-    const placeholder = subtitleContainer.querySelector('.subtitle-placeholder-results');
+    const placeholder = subtitleResultsContainer.querySelector('.subtitle-placeholder-results');
     if (placeholder) {
         placeholder.remove();
     }
+    
+    // 새로운 자막 엔트리 생성
+    const resultEntry = document.createElement('div');
+    resultEntry.className = 'subtitle-result-entry timestamped'; // 타임스탬프 스타일 추가
 
-    // 자막 엔트리 생성
-    const entryDiv = document.createElement('div');
-    entryDiv.className = 'subtitle-result-entry';
+    const totalSentences = segments.reduce((acc, seg) => acc + countSentences(seg.text), 0);
+    const totalLength = segments.reduce((acc, seg) => acc + seg.text.length, 0);
     
-    // 소스 태그
-    const sourceSpan = document.createElement('span');
-    sourceSpan.className = 'subtitle-source';
-    sourceSpan.textContent = source;
-    
-    // 타임스탬프별 자막 텍스트 생성
-    let timestampedText = '';
-    segments.forEach(segment => {
-        if (segment && segment.text) {  // segment와 segment.text가 존재하는지 확인
-            const startTime = formatTimestamp(segment.start || 0);
-            const endTime = formatTimestamp(segment.end || 0);
-            timestampedText += `[${startTime}-${endTime}] ${segment.text.trim()}\n\n`;
-        }
-    });
-    
-    // 자막 텍스트
-    const textDiv = document.createElement('div');
-    textDiv.className = 'subtitle-text';
-    textDiv.textContent = formatSubtitleText(timestampedText.trim());
-    
-    // 메타데이터
-    const metaDiv = document.createElement('div');
-    metaDiv.className = 'subtitle-meta';
-    
-    const totalLength = segments.reduce((sum, seg) => {
-        return sum + (seg && seg.text ? seg.text.length : 0);
-    }, 0);
-    const segmentCount = segments.length;
-    const totalDuration = segments.length > 0 && segments[segments.length - 1] ? 
-        (segments[segments.length - 1].end || 0) - (segments[0].start || 0) : 0;
-    
-    metaDiv.innerHTML = `
-        <span>길이: ${totalLength}자 • ${segmentCount}개 세그먼트 • ${formatTimestamp(totalDuration)} 길이</span>
-        <span>${new Date().toLocaleString()}</span>
+    let contentHTML = `
+        <div class="subtitle-source">
+            <span>${source}</span>
+            <div class="subtitle-actions">
+                <button class="icon-btn copy-btn" title="자막 복사"><i class="fas fa-copy"></i></button>
+                <button class="icon-btn save-btn" title="자막 파일(.srt)로 저장"><i class="fas fa-save"></i></button>
+                <button class="icon-btn delete-btn" title="이 결과 삭제"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+        <div class="subtitle-text">
     `;
+
+    segments.forEach(segment => {
+        const start = formatTimestamp(segment.start);
+        const end = formatTimestamp(segment.end);
+        contentHTML += `
+            <div class="subtitle-segment" data-start="${segment.start}" data-end="${segment.end}">
+                <span class="timestamp">[${start} - ${end}]</span>
+                <span class="text">${segment.text.trim()}</span>
+            </div>
+        `;
+    });
+
+    contentHTML += `
+        </div>
+        <div class="subtitle-meta">
+            <span>추출 시간: ${new Date().toLocaleString()}</span>
+            <span>길이: ${totalLength}자 • ${segments.length}개 세그먼트 • ${totalSentences}개 문장</span>
+        </div>
+    `;
+
+    resultEntry.innerHTML = contentHTML;
+
+    // 최신 결과를 맨 위에 추가
+    subtitleResultsContainer.insertBefore(resultEntry, subtitleResultsContainer.firstChild);
     
-    entryDiv.appendChild(sourceSpan);
-    entryDiv.appendChild(textDiv);
-    entryDiv.appendChild(metaDiv);
-    
-    subtitleContainer.appendChild(entryDiv);
-    
-    // 스크롤을 새로 추가된 항목으로 이동
-    entryDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    
-    console.log(`📝 타임스탬프 자막 항목 추가됨: ${source}, ${segmentCount}개 세그먼트`);
+    // 스크롤을 맨 위로 이동
+    subtitleResultsContainer.scrollTop = 0;
+
+    console.log(`✅ 타임스탬프 자막 UI 업데이트 완료`);
+
+    // 이벤트 리스너 추가 (이벤트 위임 사용)
+    resultEntry.querySelector('.copy-btn').addEventListener('click', () => copySubtitles(segments));
+    resultEntry.querySelector('.save-btn').addEventListener('click', () => saveSubtitlesAsSrt(segments, source));
+    resultEntry.querySelector('.delete-btn').addEventListener('click', () => resultEntry.remove());
+
+    // 자막 생성 완료 이벤트 호출
+    onSubtitleGenerated(segments.map(s => s.text).join('\n'));
+}
+
+function copySubtitles(segments) {
+    const textToCopy = segments.map(seg => `[${formatTimestamp(seg.start)} - ${formatTimestamp(seg.end)}] ${seg.text.trim()}`).join('\n');
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        alert('✅ 자막이 클립보드에 복사되었습니다.');
+    }, (err) => {
+        console.error('클립보드 복사 실패:', err);
+        alert('❌ 클립보드 복사에 실패했습니다.');
+    });
+}
+
+function saveSubtitlesAsSrt(segments, source) {
+    let srtContent = '';
+    segments.forEach((seg, index) => {
+        const start = new Date(seg.start * 1000).toISOString().substr(11, 12).replace('.', ',');
+        const end = new Date(seg.end * 1000).toISOString().substr(11, 12).replace('.', ',');
+        srtContent += `${index + 1}\n${start} --> ${end}\n${seg.text.trim()}\n\n`;
+    });
+
+    const blob = new Blob([srtContent], { type: 'text/srt;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const fileName = `${state.uploadedFile?.name || 'subtitles'}_${source}.srt`;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // 🎯 자막 텍스트 포맷팅 함수들

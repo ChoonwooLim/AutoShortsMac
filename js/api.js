@@ -97,7 +97,7 @@ export async function saveApiKey(modelKey, apiKey) {
 
 // --- API Call Functions ---
 
-async function callClaudeAPI(message, systemPrompt, modelData, subModel, imageData = null) {
+async function callClaudeAPI(message, systemPrompt, modelData, subModel, imagesData = []) {
     if (!modelData.apiKey) throw new Error("API 키가 설정되지 않았습니다.");
     const modelMap = {
         "Claude 3.5 Sonnet": "claude-3-5-sonnet-20241022",
@@ -107,35 +107,23 @@ async function callClaudeAPI(message, systemPrompt, modelData, subModel, imageDa
         "Claude 3 Haiku": "claude-3-haiku-20240307"
     };
     
-    // 메시지 내용 구성 (텍스트 + 이미지)
     const messageContent = [];
-    
-    if (imageData) {
-        // 이미지 데이터 추가
-        const base64Data = imageData.dataUrl.split(',')[1];
-        const mimeType = imageData.dataUrl.split(';')[0].split(':')[1];
-        
-        messageContent.push({
-            type: "image",
-            source: {
-                type: "base64",
-                media_type: mimeType,
-                data: base64Data
-            }
+
+    // 여러 이미지 데이터 추가
+    if (imagesData && imagesData.length > 0) {
+        imagesData.forEach(img => {
+            const base64Data = img.dataUrl.split(',')[1];
+            const mimeType = img.dataUrl.split(';')[0].split(':')[1];
+            messageContent.push({
+                type: "image",
+                source: { type: "base64", media_type: mimeType, data: base64Data }
+            });
         });
-        
-        console.log(`🖼️ Claude에 이미지 전송:`, {
-            fileName: imageData.name,
-            fileSize: imageData.size,
-            mimeType: mimeType
-        });
+        console.log(`🖼️ Claude에 이미지 전송: ${imagesData.length}개`);
     }
     
     if (message) {
-        messageContent.push({
-            type: "text",
-            text: message
-        });
+        messageContent.push({ type: "text", text: message });
     }
     
     const response = await fetch(modelData.endpoint, {
@@ -160,32 +148,24 @@ async function callClaudeAPI(message, systemPrompt, modelData, subModel, imageDa
     return result.content[0].text;
 }
 
-async function callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, modelMap, imageData = null) {
+async function callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, modelMap, imagesData = []) {
     if (!modelData.apiKey) throw new Error("API 키가 설정되지 않았습니다.");
     
-    // 메시지 내용 구성 (텍스트 + 이미지)
     const userContent = [];
-    
-    if (imageData) {
-        // 이미지 데이터 추가
-        userContent.push({
-            type: "image_url",
-            image_url: {
-                url: imageData.dataUrl
-            }
+
+    // 여러 이미지 데이터 추가
+    if (imagesData && imagesData.length > 0) {
+        imagesData.forEach(img => {
+            userContent.push({
+                type: "image_url",
+                image_url: { url: img.dataUrl }
+            });
         });
-        
-        console.log(`🖼️ OpenAI에 이미지 전송:`, {
-            fileName: imageData.name,
-            fileSize: imageData.size
-        });
+        console.log(`🖼️ OpenAI 호환 API에 이미지 전송: ${imagesData.length}개`);
     }
     
     if (message) {
-        userContent.push({
-            type: "text",
-            text: message
-        });
+        userContent.push({ type: "text", text: message });
     }
     
     const response = await fetch(modelData.endpoint, {
@@ -198,7 +178,7 @@ async function callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, 
             model: modelMap[subModel],
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: userContent.length > 1 || imageData ? userContent : message }
+                { role: 'user', content: userContent.length > 0 ? userContent : message }
             ]
         })
     });
@@ -210,7 +190,7 @@ async function callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, 
     return result.choices[0].message.content;
 }
 
-async function callOpenAIAPI(message, systemPrompt, modelData, subModel, imageData = null) {
+async function callOpenAIAPI(message, systemPrompt, modelData, subModel, imagesData = []) {
     const modelMap = {
         "GPT-4o": "gpt-4o",
         "GPT-4o Mini": "gpt-4o-mini",
@@ -225,15 +205,15 @@ async function callOpenAIAPI(message, systemPrompt, modelData, subModel, imageDa
     const visionModels = ["GPT-4o", "GPT-4o Mini", "GPT-4 Turbo"];
     
     // 이미지가 있는데 vision을 지원하지 않는 모델인 경우
-    if (imageData && !visionModels.includes(subModel)) {
+    if (imagesData.length > 0 && !visionModels.includes(subModel)) {
         console.warn(`⚠️ ${subModel} 모델은 이미지 분석을 지원하지 않습니다.`);
         return `⚠️ 죄송합니다. ${subModel} 모델은 이미지 분석을 지원하지 않습니다.\n\n**이미지 분석 가능한 모델:**\n• GPT-4o\n• GPT-4o Mini\n• GPT-4 Turbo\n\n이미지 분석을 위해서는 위 모델 중 하나를 선택해주세요.`;
     }
     
-    return callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, modelMap, imageData);
+    return callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, modelMap, imagesData);
 }
 
-async function callGroqAPI(message, systemPrompt, modelData, subModel, imageData = null) {
+async function callGroqAPI(message, systemPrompt, modelData, subModel, imagesData = []) {
     const modelMap = {
         "Llama 3.3 70B Versatile": "llama-3.3-70b-versatile",
         "Llama 3.1 70B Versatile": "llama-3.1-70b-versatile",
@@ -242,210 +222,143 @@ async function callGroqAPI(message, systemPrompt, modelData, subModel, imageData
     };
     
     // Groq는 현재 이미지를 지원하지 않으므로 경고 메시지
-    if (imageData) {
+    if (imagesData.length > 0) {
         console.warn('⚠️ Groq 모델은 현재 이미지 분석을 지원하지 않습니다.');
         return "⚠️ 죄송합니다. Groq 모델은 현재 이미지 분석을 지원하지 않습니다. 이미지 분석을 위해서는 Google Gemini, OpenAI GPT-4o, 또는 Claude를 사용해주세요.";
     }
     
-    return callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, modelMap, imageData);
+    return callGenericOpenAIAPI(message, systemPrompt, modelData, subModel, modelMap, imagesData);
 }
 
-
-async function callGeminiAPI(message, systemPrompt, modelData, subModel, imageData = null) {
+async function callGeminiAPI(message, systemPrompt, modelData, subModel, imagesData = []) {
     if (!modelData.apiKey) throw new Error("API 키가 설정되지 않았습니다.");
-    
     const modelMap = {
-        "Gemini 2.0 Flash": "gemini-2.0-flash-001",
+        "Gemini 2.0 Flash": "gemini-1.5-flash-latest", // NOTE: API v1beta uses 'gemini-1.5-flash-latest', not 2.0
         "Gemini 1.5 Pro": "gemini-1.5-pro-latest",
         "Gemini 1.5 Flash": "gemini-1.5-flash-latest",
-        "Gemini 1.0 Pro": "gemini-1.0-pro"
+        "Gemini 1.0 Pro": "gemini-pro-vision"
     };
-    
-    // ⚠️ 잘못된 모델명 확인
-    if (!modelMap[subModel]) {
-        console.warn(`⚠️ 알 수 없는 Gemini 서브모델: "${subModel}". 사용 가능한 모델: ${Object.keys(modelMap).join(', ')}`);
-        console.log(`🔄 기본 모델로 대체: gemini-2.0-flash-001`);
+
+    const modelToUse = modelMap[subModel] || "gemini-1.5-flash-latest";
+    const endpoint = `${modelData.endpoint}/${modelToUse}:generateContent?key=${modelData.apiKey}`;
+
+    const userParts = [];
+    if (message) {
+        userParts.push({ text: message });
     }
-    const modelName = modelMap[subModel] || "gemini-2.0-flash-001";
-    const url = `${modelData.endpoint}/${modelName}:generateContent?key=${modelData.apiKey}`;
+
+    if (imagesData && imagesData.length > 0) {
+        imagesData.forEach(img => {
+            const base64Data = img.dataUrl.split(',')[1];
+            const mimeType = img.dataUrl.split(';')[0].split(':')[1];
+            userParts.push({
+                inline_data: { mime_type: mimeType, data: base64Data }
+            });
+        });
+        console.log(`🖼️ Gemini에 이미지 전송: ${imagesData.length}개`);
+    }
+
+    const requestBody = {
+        contents: [{ role: 'user', parts: userParts }],
+        generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 1,
+            topP: 0.95,
+        }
+    };
+
+    // Gemini API는 systemInstruction을 별도로 전달합니다.
+    if (systemPrompt) {
+        requestBody.system_instruction = {
+            parts: [{ text: systemPrompt }]
+        };
+    }
 
     console.log(`🔍 Gemini API 호출:`, {
-        url: url.replace(modelData.apiKey, '***'),
-        modelName,
-        subModel
+        url: endpoint.replace(modelData.apiKey, '***'),
+        modelName: modelToUse
     });
 
     try {
-        // Gemini API는 systemInstruction을 별도로 전달
-        const requestBody = {
-            systemInstruction: {
-                parts: [{ text: systemPrompt }]
-            },
-            contents: []
-        };
-
-        // 메시지 내용 구성 (텍스트 + 이미지)
-        const messageParts = [];
-        
-        if (imageData) {
-            // 이미지 데이터 추가 (base64에서 data:image/... 부분 제거)
-            const base64Data = imageData.dataUrl.split(',')[1];
-            const mimeType = imageData.dataUrl.split(';')[0].split(':')[1];
-            
-            messageParts.push({
-                inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                }
-            });
-            
-            console.log(`🖼️ Gemini에 이미지 전송:`, {
-                fileName: imageData.name,
-                fileSize: imageData.size,
-                mimeType: mimeType
-            });
-        }
-        
-        if (message) {
-            messageParts.push({ text: message });
-        }
-        
-        requestBody.contents.push({ parts: messageParts });
-
-        console.log(`📝 Gemini 요청 구조:`, {
-            systemInstruction: systemPrompt.substring(0, 100) + '...',
-            userMessage: message.substring(0, 100) + '...'
-        });
-
-        const response = await fetch(url, {
+        const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(requestBody)
         });
-        
-        console.log(`📡 Gemini API 응답 상태:`, response.status, response.statusText);
-        
+
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`❌ Gemini API 오류 응답:`, errorText);
-            
-            let errorObj;
+            const errText = await response.text();
+            console.error('❌ Gemini API 응답 오류:', errText);
+            let errJson;
             try {
-                errorObj = JSON.parse(errorText);
+                errJson = JSON.parse(errText);
             } catch (e) {
-                errorObj = { error: { message: errorText || response.statusText } };
+                throw new Error(`[${response.status}] ${response.statusText}`);
             }
-            
-            throw new Error(errorObj.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(errJson.error.message);
         }
-        
+
         const result = await response.json();
-        console.log(`✅ Gemini API 성공 응답:`, result);
         
-        if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
-            console.error(`❌ 응답 구조 오류:`, result);
-            throw new Error("API 응답에서 예상된 데이터를 찾을 수 없습니다.");
+        if (result.candidates && result.candidates.length > 0 && result.candidates[0].content) {
+            return result.candidates[0].content.parts[0].text;
+        } else {
+            // "finishReason": "SAFETY" 등으로 인해 후보가 없는 경우
+            console.warn('⚠️ Gemini API에서 유효한 응답을 받지 못했습니다.', result);
+            return '죄송합니다. AI로부터 유효한 응답을 받지 못했습니다. 안전 설정에 의해 답변이 차단되었을 수 있습니다.';
         }
-        
-        const responseText = result.candidates[0].content.parts[0].text;
-        console.log(`📝 실제 응답 내용:`, responseText.substring(0, 200) + '...');
-        
-        return responseText;
+
     } catch (error) {
-        console.error(`❌ Gemini API 호출 중 오류:`, error);
+        console.error('❌ Gemini API 호출 실패:', error);
         throw error;
     }
 }
 
-
-export async function callAI(modelKey, subModel, systemPrompt, userMessage, imageData = null) {
-    // 입력 매개변수 검증
-    if (!modelKey) {
-        return `❌ **모델 선택 오류**\n\n모델이 선택되지 않았습니다.\n\n**해결 방법:**\n1. 화면 하단의 드롭다운에서 AI 모델 선택\n2. 예: Google Gemini → Gemini 1.5 Flash`;
+/**
+ * AI 모델을 호출하는 메인 함수
+ * @param {string} modelKey - 'claude', 'gpt', 'gemini', 'groq'
+ * @param {string} subModel - 세부 모델 이름
+ * @param {string} systemPrompt - 시스템 프롬프트
+ * @param {string} userMessage - 사용자 메시지
+ * @param {Array<object>} [imagesData=[]] - 전송할 이미지 데이터 배열
+ * @returns {Promise<string>} AI 응답 텍스트
+ */
+export async function callAI(modelKey, subModel, systemPrompt, userMessage, imagesData = []) {
+    console.log(`🤖 AI 호출: ${modelKey} - ${subModel}`, {
+        messageLength: userMessage.length,
+        imageCount: imagesData.length
+    });
+    
+    if (imagesData.length > 0) {
+        console.log(`   - 이미지 파일들:`, imagesData.map(img => `${img.name} (${(img.size/1024).toFixed(1)} KB)`).join(', '));
     }
     
     const modelData = aiModels[modelKey];
-    
-    // 모델 데이터 존재 확인
     if (!modelData) {
-        console.error(`❌ 알 수 없는 모델 키:`, modelKey);
-        console.log(`🔍 사용 가능한 모델들:`, Object.keys(aiModels));
-        return `❌ **모델 오류**\n\n선택된 모델 '${modelKey}'을(를) 찾을 수 없습니다.\n\n**사용 가능한 모델:**\n${Object.keys(aiModels).map(key => `• ${aiModels[key].name}`).join('\n')}`;
+        throw new Error("알 수 없는 AI 모델 키입니다.");
     }
-    
-    console.log(`🔍 API 호출 디버그 정보:`, {
-        modelKey,
-        subModel,
-        modelName: modelData.name,
-        hasApiKey: !!modelData.apiKey,
-        apiKeyLength: modelData.apiKey ? modelData.apiKey.length : 0,
-        endpoint: modelData.endpoint
-    });
-
-    // API 키 확인 (메모리와 localStorage 모두 체크)
-    let apiKey = modelData.apiKey;
-    if (!apiKey) {
-        // 메모리에 없으면 localStorage에서 재시도
-        apiKey = localStorage.getItem(`apiKey_${modelKey}`);
-        if (apiKey) {
-            // localStorage에서 찾았으면 메모리에도 업데이트
-            modelData.apiKey = apiKey;
-            console.log(`🔄 API 키 메모리 복원:`, { modelKey, keyLength: apiKey.length });
-        }
-    }
-    
-    if (!apiKey) {
-        return `⚠️ ${modelData.name} API 키가 설정되지 않았습니다.\n\n**설정 방법:**\n1. 화면 우측 하단의 ⚙️ 버튼 클릭\n2. ${modelData.name} API 키 입력\n3. 저장 후 다시 시도\n\n**API 키 발급:** ${modelData.apiKeyUrl}`;
+    if (!modelData.apiKey) {
+        throw new Error(`${modelData.name} API 키가 설정되지 않았습니다. 설정 메뉴에서 API 키를 입력해주세요.`);
     }
 
     try {
         switch (modelKey) {
             case 'claude':
-                return await callClaudeAPI(userMessage, systemPrompt, modelData, subModel, imageData);
+                return await callClaudeAPI(userMessage, systemPrompt, modelData, subModel, imagesData);
             case 'gpt':
-                return await callOpenAIAPI(userMessage, systemPrompt, modelData, subModel, imageData);
+                return await callOpenAIAPI(userMessage, systemPrompt, modelData, subModel, imagesData);
             case 'gemini':
-                return await callGeminiAPI(userMessage, systemPrompt, modelData, subModel, imageData);
+                return await callGeminiAPI(userMessage, systemPrompt, modelData, subModel, imagesData);
             case 'groq':
-                return await callGroqAPI(userMessage, systemPrompt, modelData, subModel, imageData);
+                return await callGroqAPI(userMessage, systemPrompt, modelData, subModel, imagesData);
             default:
-                throw new Error("선택된 AI 모델을 호출하는 기능이 아직 구현되지 않았습니다.");
+                throw new Error("지원하지 않는 AI 모델입니다.");
         }
     } catch (error) {
-        console.error(`❌ ${modelData.name} API 호출 상세 오류:`, {
-            message: error.message,
-            stack: error.stack,
-            modelKey,
-            subModel,
-            hasApiKey: !!modelData.apiKey
-        });
-        
-        // 더 구체적인 오류 메시지 제공
-        let errorMessage = error.message;
-        if (error.message.includes('API 키가 설정되지 않았습니다')) {
-            errorMessage = `API 키가 설정되지 않았습니다. ⚙️ 버튼을 클릭하여 ${modelData.name} API 키를 설정해주세요.`;
-        } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-            errorMessage = `❌ **API 키 오류**\n\nAPI 키가 유효하지 않습니다.\n\n**해결 방법:**\n1. ⚙️ 버튼 클릭\n2. 올바른 ${modelData.name} API 키 재입력\n3. API 키 발급: ${modelData.apiKeyUrl}`;
-        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
-            errorMessage = `❌ **액세스 거부**\n\nAPI 액세스가 거부되었습니다.\n\n**확인사항:**\n- ${modelData.name} 계정 활성화 상태\n- API 사용 권한 설정\n- 결제 정보 등록 여부`;
-        } else if (error.message.includes('429') || error.message.includes('rate limit')) {
-            errorMessage = `⏳ **사용량 초과**\n\nAPI 호출 한도를 초과했습니다.\n\n잠시 후 다시 시도해주세요.`;
-        } else if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('Failed to fetch')) {
-            errorMessage = `🌐 **네트워크 오류**\n\n인터넷 연결을 확인해주세요.\n\n**가능한 원인:**\n- WiFi/이더넷 연결 상태\n- 방화벽 설정\n- VPN 사용 여부\n\n**기술 정보:** Failed to fetch\n\n이는 보통 CORS 정책이나 네트워크 차단 때문입니다.`;
-            
-            // 개발자를 위한 추가 디버깅 정보
-            console.log('🔍 네트워크 오류 디버깅 정보:', {
-                endpoint: modelData.endpoint,
-                modelKey,
-                subModel,
-                error: error.message,
-                stack: error.stack
-            });
-        }
-        
-        return `${errorMessage}\n\n**기술 정보:** ${error.message}`;
+        console.error(`❌ ${modelData.name} API 호출 오류:`, error);
+        throw new Error(`${modelData.name} API 호출 중 오류가 발생했습니다: ${error.message}`);
     }
 }
 

@@ -3,6 +3,15 @@ import { callAI, aiModels, testAIConnection } from './api.js';
 import { state, workLogManager } from './state.js';
 import { collectProgramContext, formatContextForAI, extractVideoFrames } from './program-context.js';
 
+// 디바운스 함수 추가
+function debounce(func, delay) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
 // 이미지 업로드 관련 변수
 let currentUploadedImage = null;
 
@@ -227,7 +236,6 @@ export async function handleSendMessage() {
     const currentChat = state.chats.find(c => c.id === state.currentChatId);
     if (!currentChat) return;
 
-    // 텍스트 메시지가 있는 경우에만 채팅에 추가 (이미지는 이미 추가됨)
     if (userInput) {
         const messageData = {
             role: 'user',
@@ -242,10 +250,10 @@ export async function handleSendMessage() {
     
     DOM.chatInput.value = '';
     
-    // 현재 업로드된 이미지 데이터 보관 (AI 전송용)
-    const imageToSend = currentUploadedImage;
+    // AI에 보낼 이미지들을 여기서 미리 초기화합니다.
+    let imagesToSend = currentUploadedImage ? [currentUploadedImage] : [];
     
-    // 이미지 미리보기 숨기기
+    // 이미지 미리보기 숨기기 및 전역 변수 초기화
     hideImagePreview();
     
     updateSendButtonState();
@@ -314,18 +322,16 @@ export async function handleSendMessage() {
             userInput.includes('화면') || userInput.includes('장면') || userInput.includes('내용')
         ) && state.uploadedFile && DOM.videoPreview && DOM.videoPreview.src;
         
-        // 동영상 프레임 추출 (동영상 분석 요청 시)
+        // 동영상 프레임 추출 (동영상 분석 요청 시, 그리고 이미지가 첨부되지 않았을 때)
         let videoFrames = [];
-        if (isVideoAnalysisRequest && !imageToSend) {
+        if (isVideoAnalysisRequest && imagesToSend.length === 0) {
             try {
                 console.log('🎬 동영상 프레임 추출 시작...');
-                // thinking 메시지를 프레임 추출 상태로 업데이트
                 addMessageToHistory('ai', '동영상을 분석하기 위해 프레임을 추출하고 있습니다...', true);
                 
-                videoFrames = await extractVideoFrames(3); // 3개 프레임 추출
+                videoFrames = await extractVideoFrames();
                 console.log(`✅ ${videoFrames.length}개 프레임 추출 완료`);
                 
-                // thinking 메시지를 AI 응답 대기로 업데이트
                 addMessageToHistory('ai', 'AI가 동영상을 분석하고 있습니다...', true);
                 
             } catch (error) {
@@ -334,7 +340,6 @@ export async function handleSendMessage() {
                 return;
             }
         } else {
-            // 일반적인 경우 thinking 메시지 표시
             addMessageToHistory('ai', '', true);
         }
         
@@ -368,15 +373,13 @@ ${contextText}
         
         // AI에 전송할 메시지 구성
         let aiMessage = userInput;
-        let finalImageToSend = imageToSend;
         
         if (videoFrames.length > 0) {
-            // 동영상 프레임 분석 요청
-            finalImageToSend = videoFrames[0]; // 첫 번째 프레임을 메인 이미지로 사용
-            aiMessage = `동영상 분석 요청: ${userInput || '업로드된 동영상을 분석해주세요.'}\n\n📹 추출된 프레임 정보:\n${videoFrames.map((frame, i) => `- 프레임 ${i+1}: ${frame.time}초 지점`).join('\n')}\n\n첫 번째 프레임(${videoFrames[0].time}초)을 기준으로 동영상 내용을 분석하고, AutoShorts 편집을 위한 구체적인 제안을 해주세요.`;
-        } else if (imageToSend && !userInput) {
+            imagesToSend = videoFrames;
+            aiMessage = `**동영상 종합 분석 요청**\n\n사용자 질문: "${userInput || '업로드된 동영상을 전체적으로 분석하고 편집 방향을 제안해주세요.'}"\n\n**분석 자료:**\n1.  **전체 자막:** (시스템 프롬프트에 포함된 '현재 프로그램 상황' 섹션의 자막 내용 참고)\n2.  **추출된 프레임:** 아래 제공된 ${videoFrames.length}개의 프레임은 영상의 시간 순서에 따른 주요 장면들입니다.\n\n**분석 지시:**\n제공된 **모든 프레임**과 **전체 자막 내용**을 종합적으로 고려하여, 영상의 전체적인 스토리, 분위기, 그리고 시간의 흐름에 따른 변화를 분석해주세요. 이를 바탕으로 AutoShorts 편집을 위한 창의적이고 구체적인 제안을 해주세요.`;
+        } else if (imagesToSend.length > 0 && !userInput) {
             aiMessage = '업로드된 이미지를 분석해주세요. AutoShorts 편집에 도움이 될 만한 내용들을 중심으로 설명해주세요.';
-        } else if (imageToSend && userInput) {
+        } else if (imagesToSend.length > 0 && userInput) {
             aiMessage = `이미지 관련 질문: ${userInput}`;
         } else if (!userInput && programContext.uploadedFile) {
             aiMessage = '현재 업로드된 동영상과 설정을 바탕으로 AutoShorts 편집을 위한 조언을 해주세요.';
@@ -386,12 +389,11 @@ ${contextText}
             modelKey, 
             subModel, 
             userInput: aiMessage.substring(0, 50) + '...',
-            hasImage: !!finalImageToSend,
-            hasVideoFrames: videoFrames.length > 0,
+            imageCount: imagesToSend.length,
             contextIncluded: true
         });
         
-        const aiResponse = await callAI(modelKey, subModel, systemPrompt, aiMessage, finalImageToSend);
+        const aiResponse = await callAI(modelKey, subModel, systemPrompt, aiMessage, imagesToSend);
         currentChat.messages.push({ role: 'ai', content: aiResponse });
         addMessageToHistory('ai', aiResponse);
         
@@ -762,7 +764,10 @@ export function setupChatEventListeners() {
     DOM.newChatBtn.addEventListener('click', startNewChat);
     DOM.sendChatBtn.addEventListener('click', handleSendMessage);
     DOM.testAIBtn.addEventListener('click', handleAIConnectionTest);
-    DOM.chatInput.addEventListener('input', updateSendButtonState);
+    // 디바운스를 적용하여 input 이벤트 핸들러 최적화
+    const debouncedUpdateSendButtonState = debounce(updateSendButtonState, 250);
+    DOM.chatInput.addEventListener('input', debouncedUpdateSendButtonState);
+
     DOM.chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();

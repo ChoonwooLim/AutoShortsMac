@@ -13,6 +13,10 @@ export function collectProgramContext() {
         uploadedFile: null,
         videoInfo: null,
         
+        // 추출된 데이터
+        subtitles: null,
+        faceResults: null,
+
         // 선택된 플랫폼
         selectedPlatform: null,
         
@@ -127,13 +131,30 @@ export function collectProgramContext() {
         context.faceAnalysis.hasResults = true;
     }
     
+    // 자막 및 얼굴 데이터 추가 (state에서 직접 가져오기)
+    if (state.subtitles && state.subtitles.length > 0) {
+        // 자막이 너무 길 수 있으므로 일부만 요약해서 제공
+        context.subtitles = state.subtitles.slice(0, 10).map(s => `[${s.start.toFixed(1)}초] ${s.text}`).join('\n');
+        if (state.subtitles.length > 10) {
+            context.subtitles += '\n... 등';
+        }
+    }
+
+    if (state.faceResults && state.faceResults.length > 0) {
+        context.faceResults = {
+            count: state.faceResults.length,
+            // 얼굴 ID 목록을 요약해서 제공
+            identities: [...new Set(state.faceResults.map(f => f.faceId))].slice(0, 5).join(', ') + (state.faceResults.length > 5 ? ' 등' : '')
+        };
+    }
+
     return context;
 }
 
 /**
- * 동영상에서 여러 프레임을 추출하여 이미지 데이터로 변환
+ * 동영상에서 1초당 1프레임씩, 최대 60프레임까지 균등하게 추출하여 이미지 데이터로 변환
  */
-export async function extractVideoFrames(maxFrames = 5) {
+export async function extractVideoFrames() {
     if (!DOM.videoPreview || !DOM.videoPreview.src || !state.uploadedFile) {
         throw new Error('분석할 동영상이 없습니다. 먼저 동영상을 업로드해주세요.');
     }
@@ -144,22 +165,31 @@ export async function extractVideoFrames(maxFrames = 5) {
     if (!duration || duration === 0) {
         throw new Error('동영상 길이를 확인할 수 없습니다. 동영상이 완전히 로드되었는지 확인해주세요.');
     }
+
+    // 1초당 1프레임, 최대 60개로 제한
+    const framesToExtractCount = Math.min(Math.floor(duration), 60);
+
+    if (framesToExtractCount === 0) {
+        console.warn('영상이 너무 짧아 프레임을 추출할 수 없습니다.');
+        return [];
+    }
     
+    console.log(`🎬 프레임 추출 계획: ${duration.toFixed(1)}초 영상에서 ${framesToExtractCount}개 프레임 추출`);
+
     const frames = [];
-    const interval = duration / (maxFrames + 1); // 균등하게 분배
+    const interval = duration / framesToExtractCount;
     
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    // 캔버스 크기 설정
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     
-    for (let i = 1; i <= maxFrames; i++) {
-        const time = interval * i;
+    for (let i = 0; i < framesToExtractCount; i++) {
+        // 각 구간의 중간 지점에서 프레임을 추출하여 대표성 확보
+        const time = interval * i + (interval / 2);
         
         try {
-            // 비디오 시간 설정하고 프레임 추출 대기
             await new Promise((resolve, reject) => {
                 const handleSeeked = () => {
                     video.removeEventListener('seeked', handleSeeked);
@@ -176,7 +206,6 @@ export async function extractVideoFrames(maxFrames = 5) {
                 
                 video.currentTime = time;
                 
-                // 타임아웃 설정 (5초 후 강제 해제)
                 setTimeout(() => {
                     video.removeEventListener('seeked', handleSeeked);
                     video.removeEventListener('error', handleError);
@@ -184,28 +213,26 @@ export async function extractVideoFrames(maxFrames = 5) {
                 }, 5000);
             });
             
-            // 캔버스에 현재 프레임 그리기
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // 이미지 데이터 추출
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             
             frames.push({
                 time: Math.floor(time),
                 dataUrl: dataUrl,
                 name: `frame_${Math.floor(time)}s.jpg`,
-                size: Math.floor(dataUrl.length * 0.75) // Base64 크기 추정
+                size: Math.floor(dataUrl.length * 0.75)
             });
             
         } catch (error) {
-            console.warn(`프레임 ${i} 추출 실패 (${time}초):`, error);
+            console.warn(`프레임 ${i + 1}/${framesToExtractCount} 추출 실패 (${time.toFixed(1)}초):`, error);
         }
     }
     
     if (frames.length === 0) {
-        throw new Error('동영상 프레임을 추출할 수 없습니다.');
+        throw new Error('동영상 프레임을 추출할 수 없습니다. 동영상 파일이 유효한지 확인해주세요.');
     }
     
+    console.log(`✅ 최종 추출된 프레임: ${frames.length}개`);
     return frames;
 }
 
@@ -232,6 +259,16 @@ export function formatContextForAI(context) {
         }
     } else {
         contextText += `⚠️ **동영상 없음:** 아직 동영상이 업로드되지 않았습니다.\n\n`;
+    }
+
+    // 추출된 데이터 정보
+    if (context.subtitles) {
+        contextText += `📜 **추출된 자막 내용 (일부):**\n${context.subtitles}\n\n`;
+    }
+    if (context.faceResults) {
+        contextText += `👥 **얼굴 분석 결과:**\n`;
+        contextText += `- 인식된 인물 수: ${context.faceResults.count}명\n`;
+        contextText += `- 주요 인물 ID: ${context.faceResults.identities}\n\n`;
     }
     
     // 선택된 플랫폼
