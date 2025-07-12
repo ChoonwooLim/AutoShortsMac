@@ -219,7 +219,7 @@ function handleResetGoogleConfig() {
     }
 }
 
-function showApiKeyModal(modelKey) {
+async function showApiKeyModal(modelKey) {
     currentApiModelKey = modelKey;
     const modelData = aiModels[modelKey];
     
@@ -228,61 +228,38 @@ function showApiKeyModal(modelKey) {
         return;
     }
     
-    // API 키 로드 (통일된 방식)
+    // API 키 로드 (통일된 비동기 방식)
     let savedApiKey = '';
     
     try {
-        // 1. window.apiKeyManager 사용 (우선)
         if (window.apiKeyManager) {
-            console.log('🔑 apiKeyManager 사용하여 로드');
-            savedApiKey = window.apiKeyManager.loadApiKey(modelKey) || '';
+            console.log('🔑 apiKeyManager를 사용하여 비동기적으로 키 로드');
+            savedApiKey = await window.apiKeyManager.loadApiKey(modelKey) || '';
             
             // 메모리에도 반영
-            if (savedApiKey && aiModels[modelKey]) {
+            if (aiModels[modelKey]) {
                 aiModels[modelKey].apiKey = savedApiKey;
             }
         } else {
-            // 2. 폴백: localStorage 직접 사용
-            console.log('📦 localStorage 직접 사용하여 로드');
+            console.warn('⚠️ window.apiKeyManager를 찾을 수 없어 localStorage에서 직접 로드합니다.');
             savedApiKey = localStorage.getItem(`apiKey_${modelKey}`) || '';
-            
-            // 메모리에도 반영
+             // 메모리에도 반영
             if (savedApiKey && aiModels[modelKey]) {
                 aiModels[modelKey].apiKey = savedApiKey;
             }
         }
-        
-        console.log('🔍 API 키 로드 결과:', {
-            modelKey,
-            hasKey: !!savedApiKey,
-            keyLength: savedApiKey.length
-        });
-        
     } catch (error) {
-        console.error('❌ API 키 로드 실패:', error);
-        savedApiKey = '';
+        console.error('API 키 로드 중 오류 발생:', error);
+        savedApiKey = ''; // 오류 발생 시 빈 문자열로 초기화
     }
-    
-    // 모달 UI 설정
+
     DOM.apiKeyModalTitle.textContent = `${modelData.name} API 키 설정`;
     DOM.apiKeyInput.value = savedApiKey;
-    DOM.apiKeyInput.placeholder = savedApiKey ? '저장된 API 키가 있습니다' : 'API 키를 입력하세요';
     DOM.apiKeyLink.href = modelData.apiKeyUrl;
+    DOM.apiKeyLink.textContent = `${modelData.name} API 키 발급받기`;
+    
     DOM.apiKeyModal.style.display = 'flex';
-    
-    // 마스킹된 키 표시 (보안)
-    if (savedApiKey && window.apiKeyManager) {
-        const maskedKey = window.apiKeyManager.maskApiKey(savedApiKey);
-        DOM.apiKeyInput.placeholder = `저장된 키: ${maskedKey}`;
-    }
-    
-    // 디버깅 로그
-    console.log('📋 API 키 모달 열림:', {
-        modelKey,
-        modelName: modelData.name,
-        hasStoredKey: !!savedApiKey,
-        keyLength: savedApiKey.length
-    });
+    DOM.apiKeyInput.focus();
 }
 
 function hideApiKeyModal() {
@@ -293,91 +270,41 @@ function hideApiKeyModal() {
 }
 
 async function handleSaveApiKey() {
-    if (!currentApiModelKey || !DOM.apiKeyInput) return;
-    
     const apiKey = DOM.apiKeyInput.value.trim();
+    if (!currentApiModelKey) {
+        alert('오류: 현재 API 모델이 선택되지 않았습니다.');
+        return;
+    }
+
     if (!apiKey) {
         alert('API 키를 입력해주세요.');
         return;
     }
-    
-    console.log('💾 API 키 저장 시작:', {
-        modelKey: currentApiModelKey,
-        apiKeyLength: apiKey.length,
-        apiKeyStart: apiKey.substring(0, 10) + '...'
-    });
-    
+
     try {
-        // 1. window.apiKeyManager 사용 (우선)
-        if (window.apiKeyManager) {
-            console.log('🔑 apiKeyManager 사용하여 저장');
-            
-            // 검증
-            const validation = window.apiKeyManager.validateApiKey(currentApiModelKey, apiKey);
-            if (!validation.valid) {
-                alert(`❌ API 키가 유효하지 않습니다: ${validation.message}`);
-                return;
+        DOM.saveApiKeyBtn.disabled = true;
+        DOM.saveApiKeyBtn.textContent = '저장 중...';
+
+        console.log(`🔑 ${currentApiModelKey} API 키 저장 시도...`);
+        const result = await saveApiKey(currentApiModelKey, apiKey);
+
+        if (result.success) {
+            // aiModels 객체에도 최신 키 반영
+            if (aiModels[currentApiModelKey]) {
+                aiModels[currentApiModelKey].apiKey = apiKey;
             }
-            
-            // 동기 방식으로 저장
-            const success = window.apiKeyManager.saveApiKeySync(currentApiModelKey, apiKey);
-            if (success) {
-                // 작업 로그 기록
-                workLogManager.addWorkLog('settings', `${aiModels[currentApiModelKey].name} API 키 저장`, {
-                    provider: currentApiModelKey,
-                    keyLength: apiKey.length,
-                    masked: window.apiKeyManager.maskApiKey(apiKey)
-                });
-                
-                alert('✅ API 키가 성공적으로 저장되었습니다.');
-                hideApiKeyModal();
-                
-                // 즉시 확인
-                setTimeout(() => {
-                    const savedKey = window.apiKeyManager.loadApiKeySync(currentApiModelKey);
-                    console.log('🔍 저장 후 확인:', {
-                        modelKey: currentApiModelKey,
-                        saved: !!savedKey,
-                        keyLength: savedKey ? savedKey.length : 0
-                    });
-                    
-                    // aiModels에도 반영
-                    if (aiModels[currentApiModelKey] && savedKey) {
-                        aiModels[currentApiModelKey].apiKey = savedKey;
-                        console.log('✅ aiModels에 API 키 반영 완료');
-                    }
-                }, 100);
-                
-                return;
-            }
+            console.log(`✅ ${currentApiModelKey} API 키 저장 성공.`);
+            alert(`${aiModels[currentApiModelKey].name} API 키가 안전하게 저장되었습니다.`);
+            hideApiKeyModal();
+        } else {
+            throw new Error(result.error || '알 수 없는 오류로 키 저장에 실패했습니다.');
         }
-        
-        // 2. 폴백: localStorage 직접 사용
-        console.log('📦 localStorage 직접 사용하여 저장');
-        
-        // api.js의 saveApiKey 함수 사용
-        const { saveApiKey } = await import('./api.js');
-        await saveApiKey(currentApiModelKey, apiKey);
-        
-        // 추가 검증: localStorage에 실제로 저장되었는지 확인
-        const savedKey = localStorage.getItem(`apiKey_${currentApiModelKey}`);
-        const memoryKey = aiModels[currentApiModelKey] ? aiModels[currentApiModelKey].apiKey : null;
-        
-        console.log('🔍 저장 후 검증:', {
-            modelKey: currentApiModelKey,
-            localStorage: !!savedKey,
-            memory: !!memoryKey,
-            localStorageLength: savedKey ? savedKey.length : 0,
-            memoryLength: memoryKey ? memoryKey.length : 0
-        });
-        
-        alert('✅ API 키가 저장되었습니다.');
-        hideApiKeyModal();
-        
     } catch (error) {
-        console.error('❌ API 키 저장 실패:', error);
-        const modelName = aiModels[currentApiModelKey] ? aiModels[currentApiModelKey].name : currentApiModelKey;
-        alert(`❌ ${modelName} API 키 저장에 실패했습니다.\n\n오류: ${error.message}`);
+        console.error(`❌ ${currentApiModelKey} API 키 저장 실패:`, error);
+        alert(`API 키 저장에 실패했습니다. 다음을 확인해주세요:\n\n- API 키가 정확한지 확인해주세요.\n- 콘솔(F12)에서 오류 메시지를 확인해주세요.\n\n오류: ${error.message}`);
+    } finally {
+        DOM.saveApiKeyBtn.disabled = false;
+        DOM.saveApiKeyBtn.textContent = '저장';
     }
 }
 

@@ -1,7 +1,13 @@
-const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
+
+const apiKeyStorePath = path.join(app.getPath('userData'), 'apiKeys');
+if (!fs.existsSync(apiKeyStorePath)) {
+    fs.mkdirSync(apiKeyStorePath);
+}
+console.log('🔑 API 키 저장 경로:', apiKeyStorePath);
 
 // 개발 모드 확인 - 더 정확한 판단 로직
 const isDev = process.env.NODE_ENV === 'development' || 
@@ -128,6 +134,78 @@ function createWindow() {
         return { action: 'deny' };
     });
 }
+
+// API 키 저장을 위한 IPC 핸들러
+ipcMain.handle('save-api-key', (event, { provider, apiKey }) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+        console.error('Safe Storage is not available. The login keychain might be locked.');
+        return { 
+            success: false, 
+            error: '암호화를 사용할 수 없습니다. Mac의 "로그인" 키체인이 잠겨있거나 사용할 수 없는 상태일 수 있습니다. 키체인 접근을 허용하고 다시 시도해주세요.' 
+        };
+    }
+    try {
+        const encryptedKey = safeStorage.encryptString(apiKey);
+        const filePath = path.join(apiKeyStorePath, `${provider}.key`);
+        fs.writeFileSync(filePath, encryptedKey);
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to save API key for ${provider}:`, error);
+        return { success: false, error: error.message };
+    }
+});
+
+// API 키 로드를 위한 IPC 핸들러
+ipcMain.handle('load-api-key', (event, provider) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+        console.warn('Safe Storage is not available for decryption.');
+        // 키를 로드할 수 없음을 알리지만, 오류로 처리하지는 않음
+        return { success: true, apiKey: null };
+    }
+    try {
+        const filePath = path.join(apiKeyStorePath, `${provider}.key`);
+        if (fs.existsSync(filePath)) {
+            const encryptedKey = fs.readFileSync(filePath);
+            const decryptedKey = safeStorage.decryptString(encryptedKey);
+            return { success: true, apiKey: decryptedKey };
+        }
+        return { success: true, apiKey: null }; // 키가 없는 경우
+    } catch (error) {
+        console.error(`Failed to load API key for ${provider}:`, error);
+        return { success: false, error: error.message };
+    }
+});
+
+// API 키 삭제를 위한 IPC 핸들러
+ipcMain.handle('delete-api-key', (event, provider) => {
+    try {
+        const filePath = path.join(apiKeyStorePath, `${provider}.key`);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to delete API key for ${provider}:`, error);
+        return { success: false, error: error.message };
+    }
+});
+
+// 저장된 모든 API 키 존재 여부 확인
+ipcMain.handle('get-all-api-keys', (event) => {
+    try {
+        const files = fs.readdirSync(apiKeyStorePath);
+        const providers = files.map(file => path.basename(file, '.key'));
+        const keyStatus = {};
+        providers.forEach(provider => {
+            keyStatus[provider] = true;
+        });
+        return { success: true, keys: keyStatus };
+    } catch (error) {
+        console.error('Failed to get all API keys:', error);
+        return { success: false, error: error.message };
+    }
+});
+
 
 // 앱 준비 완료
 app.whenReady().then(() => {
@@ -313,6 +391,17 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
 
 ipcMain.handle('shell-open-path', async (event, path) => {
     return await shell.openPath(path);
+});
+
+ipcMain.handle('show-directory-dialog', async () => {
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory', 'createDirectory'],
+        title: '저장할 폴더를 선택하세요'
+    });
+    if (filePaths && filePaths.length > 0) {
+        return filePaths[0];
+    }
+    return null;
 });
 
 // 애플리케이션 종료 전 정리

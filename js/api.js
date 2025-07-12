@@ -32,43 +32,87 @@ export const aiModels = {
 };
 
 async function loadSavedApiKeys() {
-    console.log('🔑 저장된 API 키들 로드 시작...');
-    
-    // 동기 방식으로 모든 API 키 로드
+    console.log('🔑 저장된 API 키들 로드 및 마이그레이션 시작...');
     let loadedCount = 0;
-    for (const provider of Object.keys(aiModels)) {
-        // 먼저 새로운 암호화 방식으로 시도
-        let apiKey = apiKeyManager.loadApiKeySync(provider);
-        
-        // 실패시 기존 localStorage 방식으로 시도 (fallback)
-        if (!apiKey) {
-            const oldKey = localStorage.getItem(`apiKey_${provider}`);
-            if (oldKey) {
-                console.log(`🔄 ${provider}: 기존 방식 API 키 발견, 마이그레이션 시도...`);
-                // 새로운 암호화 방식으로 저장
-                try {
-                    apiKeyManager.saveApiKeySync(provider, oldKey);
-                    apiKey = oldKey;
-                    // 기존 키 삭제
-                    localStorage.removeItem(`apiKey_${provider}`);
-                    console.log(`✅ ${provider}: API 키 마이그레이션 완료`);
-                } catch (error) {
-                    console.error(`❌ ${provider}: 마이그레이션 실패`, error);
-                    // 마이그레이션 실패해도 기존 키 사용
-                    apiKey = oldKey;
-                }
-            }
-        }
-        
-        if (apiKey) {
+
+    // 1. 새로운 safeStorage에서 모든 키를 먼저 로드합니다.
+    const securelyLoadedKeys = await apiKeyManager.loadAllApiKeys();
+    for (const [provider, apiKey] of Object.entries(securelyLoadedKeys)) {
+        if (aiModels[provider]) {
             aiModels[provider].apiKey = apiKey;
             loadedCount++;
-            console.log(`✅ ${provider} API 키 로드됨`);
+        }
+    }
+
+    // 2. 이전 localStorage 방식의 키가 있는지 확인하고 마이그레이션합니다.
+    for (const provider of Object.keys(aiModels)) {
+        const oldKey = localStorage.getItem(`apiKey_${provider}`);
+        if (oldKey) {
+            console.log(`🔄 ${provider}: 이전 방식(localStorage) API 키 발견, 마이그레이션 시작...`);
+            try {
+                // 새로운 방식으로 저장
+                const success = await apiKeyManager.saveApiKey(provider, oldKey);
+                if (success) {
+                    // 메모리에 반영
+                    aiModels[provider].apiKey = oldKey;
+                    // 기존 키 삭제
+                    localStorage.removeItem(`apiKey_${provider}`);
+                    console.log(`✅ ${provider}: API 키 마이그레이션 성공`);
+                    if (!securelyLoadedKeys[provider]) { // 새로 추가된 경우 카운트
+                        loadedCount++;
+                    }
+                } else {
+                    throw new Error('apiKeyManager.saveApiKey가 false를 반환했습니다.');
+                }
+            } catch (error) {
+                console.error(`❌ ${provider}: API 키 마이그레이션 실패`, error);
+                // 마이그레이션 실패 시에도 일단 메모리에는 로드
+                if (!aiModels[provider].apiKey) {
+                    aiModels[provider].apiKey = oldKey;
+                }
+            }
         }
     }
     
     console.log(`🔑 API 키 로드 완료: ${loadedCount}/${Object.keys(aiModels).length}개 모델`);
+
+    // --- 세션 기반 키 복원 로직 ---
+    if (loadedCount > 0) {
+        // 성공적으로 로드된 키를 세션 스토리지에 백업
+        sessionStorage.setItem('apiKey_backup', JSON.stringify(aiModels));
+        console.log('💾 현재 API 키 상태를 세션에 백업했습니다.');
+    } else if (sessionStorage.getItem('apiKey_backup')) {
+        console.warn('🤔 저장된 API 키를 찾을 수 없지만, 세션 백업이 존재합니다.');
+        if (confirm('저장된 API 키를 찾을 수 없습니다.\n\n이전 세션에서 사용하던 API 키를 복원하시겠습니까?')) {
+            const backupModels = JSON.parse(sessionStorage.getItem('apiKey_backup'));
+            for (const provider of Object.keys(aiModels)) {
+                if (backupModels[provider] && backupModels[provider].apiKey) {
+                    aiModels[provider].apiKey = backupModels[provider].apiKey;
+                }
+            }
+            console.log('✅ 세션 백업에서 API 키를 복원했습니다.');
+            alert('이전 세션의 API 키가 복원되었습니다. 다시 저장하여 영구적으로 보관해주세요.');
+        }
+    }
 }
+
+// 디버깅/문제 해결을 위한 전역 함수
+window.restoreApiKeysFromSession = function() {
+    const backup = sessionStorage.getItem('apiKey_backup');
+    if (backup) {
+        const backupModels = JSON.parse(backup);
+        for (const provider of Object.keys(aiModels)) {
+            if (backupModels[provider] && backupModels[provider].apiKey) {
+                aiModels[provider].apiKey = backupModels[provider].apiKey;
+            }
+        }
+        console.log('✅ 수동으로 API 키를 세션 백업에서 복원했습니다.');
+        alert('세션에서 API 키를 복원했습니다. 각 키를 다시 저장해주세요.');
+    } else {
+        console.log('ℹ️ 복원할 세션 백업이 없습니다.');
+        alert('복원할 세션 백업 데이터가 없습니다.');
+    }
+};
 
 export async function getApiKey(modelKey) {
     // For transcription services, we can alias them to the main model
@@ -83,16 +127,10 @@ export async function getApiKey(modelKey) {
 
 export async function saveApiKey(modelKey, apiKey) {
     if (aiModels[modelKey]) {
-        // 새로운 apiKeyManager 사용
-        const success = await apiKeyManager.saveApiKey(modelKey, apiKey);
-        
-        if (success) {
-        console.log(`🔐 API 키 저장 완료:`, {
-            modelKey,
-                keyLength: apiKey.length
-        });
-        }
+        // 새로운 apiKeyManager 사용, 결과를 그대로 반환
+        return await apiKeyManager.saveApiKey(modelKey, apiKey);
     }
+    return { success: false, error: '해당 모델을 찾을 수 없습니다.' };
 }
 
 // --- API Call Functions ---
@@ -418,8 +456,8 @@ window.testApiKey = async function(provider, apiKey) {
     console.log(`🔑 ${provider} API 키 테스트 시작...`);
     
     if (!apiKey) {
-        // 저장된 키 사용
-        apiKey = apiKeyManager.loadApiKeySync(provider);
+        // 저장된 키 사용 (비동기)
+        apiKey = await apiKeyManager.loadApiKey(provider);
         if (!apiKey) {
             console.error('❌ 저장된 API 키가 없습니다');
             return false;
@@ -445,10 +483,10 @@ window.testApiKey = async function(provider, apiKey) {
     }
 };
 
-window.debugApiKeys = function() {
+window.debugApiKeys = async function() {
     console.log('🔍 저장된 API 키 상태:');
     for (const provider of Object.keys(aiModels)) {
-        const savedKey = apiKeyManager.loadApiKeySync(provider);
+        const savedKey = await apiKeyManager.loadApiKey(provider);
         const memoryKey = aiModels[provider].apiKey;
         
         console.log(`${provider}:`, {
@@ -461,8 +499,8 @@ window.debugApiKeys = function() {
     }
 };
 
-window.clearApiKey = function(provider) {
-    if (apiKeyManager.deleteApiKey(provider)) {
+window.clearApiKey = async function(provider) {
+    if (await apiKeyManager.deleteApiKey(provider)) {
         console.log(`✅ ${provider} API 키 삭제됨`);
     } else {
         console.error(`❌ ${provider} API 키 삭제 실패`);
@@ -590,7 +628,7 @@ export async function testAllAIConnections() {
 // 디버깅 및 복구용 전역 함수들
 window.apiDebug = {
     // 모든 API 키 상태 확인
-    checkAll: function() {
+    checkAll: async function() {
         console.log('=== API 키 상태 확인 ===');
         
         // 메모리상의 API 키
@@ -626,8 +664,8 @@ window.apiDebug = {
                 aiModels[provider].apiKey = apiKey;
                 console.log(`✅ ${provider} API 키 메모리 설정 완료`);
                 
-                // 영구 저장
-                await apiKeyManager.saveApiKeySync(provider, apiKey);
+                // 영구 저장 (비동기)
+                await apiKeyManager.saveApiKey(provider, apiKey);
                 console.log(`✅ ${provider} API 키 저장 완료`);
                 
                 return true;
@@ -643,7 +681,7 @@ window.apiDebug = {
     },
     
     // 모든 암호화된 데이터 제거 및 재설정
-    reset: function() {
+    reset: async function() {
         if (!confirm('⚠️ 모든 저장된 API 키가 삭제됩니다. 계속하시겠습니까?')) {
             return '취소됨';
         }

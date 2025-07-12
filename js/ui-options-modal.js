@@ -94,11 +94,10 @@ class OptionsModalManager {
         // 폴더 선택 버튼
         const folderBtn = document.getElementById('modal-selectFolderBtn');
         if (folderBtn) {
-            folderBtn.addEventListener('click', () => {
-                // 실제 구현에서는 파일 시스템 API를 사용하거나 서버 통신
-                const folder = prompt('저장할 폴더 경로를 입력하세요:', 'C:\\AutoShorts\\Output');
-                if (folder) {
-                    document.getElementById('modal-outputFolder').value = folder;
+            folderBtn.addEventListener('click', async () => {
+                const folderPath = await window.electronAPI.selectDirectory();
+                if (folderPath) {
+                    document.getElementById('modal-outputFolder').value = folderPath;
                 }
             });
         }

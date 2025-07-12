@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Electron API를 웹 페이지에 안전하게 노출
 contextBridge.exposeInMainWorld('electronAPI', {
+    // API 키 관리
+    saveApiKey: (provider, apiKey) => ipcRenderer.invoke('save-api-key', { provider, apiKey }),
+    loadApiKey: (provider) => ipcRenderer.invoke('load-api-key', provider),
+    deleteApiKey: (provider) => ipcRenderer.invoke('delete-api-key', provider),
+    getAllApiKeys: () => ipcRenderer.invoke('get-all-api-keys'),
+    
     // 앱 정보
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     getUserDataPath: () => ipcRenderer.invoke('get-user-data-path'),
@@ -16,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // 시스템 연동
     openPath: (path) => ipcRenderer.invoke('shell-open-path', path),
+    selectDirectory: () => ipcRenderer.invoke('show-directory-dialog'),
     
     // 테마 관리
     getTheme: () => ipcRenderer.invoke('get-theme'),
