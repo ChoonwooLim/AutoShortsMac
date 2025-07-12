@@ -34,6 +34,14 @@
     "natural": "^5.0.0",
     "node-fetch": "^3.3.2"
   },
+  "overrides": {
+    "face-api.js": {
+      "node-fetch": ">=2.6.7"
+    },
+    "tfjs-image-recognition-base": {
+      "node-fetch": ">=2.6.7"
+    }
+  },
   "build": {
     "appId": "com.twinverse.autoshorts",
     "productName": "AutoShorts Desktop",
