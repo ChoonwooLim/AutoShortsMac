@@ -14,6 +14,9 @@ import performanceMonitor from './utils/performance-monitor.js';
 // state를 window에 할당하여 전역 접근 가능하게 함
 window.state = state;
 
+// 신규: 프로젝트 관리 함수 직접 임포트
+import { saveProject, loadProject } from './project-manager.js';
+
 /**
  * Initializes the entire application with lazy loading optimization.
  */
@@ -27,12 +30,14 @@ async function main() {
         // 2. 메모리 관리자 초기화
         memoryManager.startMonitoring();
         
-        // 3. 테마 적용 (즉시) - 직접 구현으로 의존성 제거
+        // 3. 테마 적용 (즉시)
         initializeTheme();
         
-        // 3.5. API 키 초기화 (저장된 키들 로드)
+        // 3.5. API 키 초기화 (완료될 때까지 기다림)
         await initializeApiManagement();
         console.log('🔑 저장된 API 키들을 로드했습니다');
+
+        // --- API 초기화 후 순차 실행 보장 ---
         
         // 3.6. 작업 로그 초기화
         const { workLogManager } = await import('./state.js');
@@ -42,27 +47,9 @@ async function main() {
             browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Other'
         });
         
-        // 예제 작업 로그 추가 (첫 실행시에만)
-        if (state.workLogs.length <= 1) {
-            workLogManager.addWorkLog('upload', '예제 영상 파일 업로드', { 
-                fileName: 'sample_video.mp4',
-                fileSize: '25.6MB'
-            });
-            workLogManager.addWorkLog('transcription', '음성 자막 추출 완료', { 
-                duration: '5분 23초',
-                language: 'ko-KR',
-                provider: 'Google'
-            });
-            workLogManager.addWorkLog('processing', '숏츠 영상 3개 생성 완료', { 
-                count: 3,
-                format: 'MP4',
-                resolution: '1080x1920'
-            });
-        }
-        
         console.log('📝 작업 로그 시스템 초기화 완료');
         
-        // 3.7. Electron 환경 감지 및 초기화 (UI 변경 최소화)
+        // 3.7. Electron 환경 감지 및 초기화
         if (window.electronAPI && window.electronAPI.isElectron) {
             console.log('🖥️ Electron 데스크톱 환경 감지됨 (웹 UI 유지)');
             initializeElectronFeatures();
@@ -78,7 +65,7 @@ async function main() {
             });
         }
         
-        // 3.6. AudioUtils 미리 로드 (자막 추출 버튼 두 번 클릭 문제 해결)
+        // 3.8. AudioUtils 미리 로드
         try {
             const audioUtilsModule = await import('./utils/audio-utils.js');
             window.audioUtils = audioUtilsModule.default || audioUtilsModule;
@@ -101,26 +88,29 @@ async function main() {
         performanceMonitor.startModuleTimer('ui-initialization');
         await Promise.all([
             initializeSettingsUI(),
-            setupSettingsEventListeners()
+            setupSettingsEventListeners() // setupSettingsEventListeners는 initializeSettingsUI와 함께 로드됨
         ]);
         performanceMonitor.endModuleTimer('ui-initialization');
+        console.log('✅ 기본 UI 설정 초기화 완료');
+
+        // 7. 모든 비동기 UI 초기화 후, 동기적인 이벤트 리스너 설정
+        // setupProjectEventListeners(); // 더 이상 사용하지 않으므로 제거
+        console.log('✅ 주요 이벤트 리스너 설정 완료');
         
-        console.log('✅ 기본 UI 초기화 완료');
-        
-        // 7. Google 설정 확인
+        // 8. Google 설정 확인
         if (!googleConfig.clientId) {
             console.warn('⚠️ Google Client ID가 설정되지 않았습니다. 설정 페이지에서 구성해주세요.');
         }
         
-        // 8. 나머지 모듈들을 백그라운드에서 프리로드
+        // 9. 나머지 모듈들을 백그라운드에서 프리로드
         setupBackgroundPreloading();
         
-        // 9. 초기화 완료 및 성능 리포트
+        // 10. 초기화 완료 및 성능 리포트
         console.log(`🎯 AutoShorts Desktop 기본 초기화 완료 - 추가 기능은 필요시 로드됩니다`);
         console.log(`📊 등록된 이벤트 리스너: ${eventManager.getListenerCount()}개`);
         memoryManager.generateMemoryReport();
         
-        // 10초 후 성능 리포트 생성 (초기 로딩 완료 후)
+        // 10초 후 성능 리포트 생성
         setTimeout(() => {
             performanceMonitor.generateReport();
         }, 10000);
@@ -226,6 +216,17 @@ function initializeElectronFeatures() {
             handleElectronFileUpload(filePath);
         });
         
+        // 🚀 신규: 프로젝트 저장/불러오기 메뉴 이벤트 리스너
+        window.electronAPI.onSaveProjectTriggered(() => {
+            console.log('💾 메뉴: 프로젝트 저장');
+            saveProject(); // 직접 함수 호출
+        });
+
+        window.electronAPI.onLoadProjectTriggered(() => {
+            console.log('📂 메뉴: 프로젝트 불러오기');
+            loadProject(); // 직접 함수 호출
+        });
+
         // 설정 열기 (기존 웹 UI 재사용)
         window.electronAPI.onOpenSettings(() => {
             console.log('⚙️ 메뉴: 설정 열기 (기존 웹 모달 재사용)');

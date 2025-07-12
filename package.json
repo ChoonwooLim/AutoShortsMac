@@ -1,7 +1,8 @@
 {
-  "name": "autoshortsdesktop",
-  "private": true,
+  "name": "AutoShortsDesktop",
+  "productName": "AutoShorts",
   "version": "1.0.6",
+  "description": "AutoShorts Desktop Application",
   "type": "module",
   "main": "electron/main.cjs",
   "homepage": "./",

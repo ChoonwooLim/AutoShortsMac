@@ -34,14 +34,7 @@
     <div class="main-layout">
         <!-- 왼쪽 패널: 설정 및 컨트롤 -->
         <div class="left-panel">
-        <div class="header">
-            <img src="image/TwinverseLogo.png" alt="Twinverse Logo" class="header-logo">
-            <div class="title-box">
-                <h1>🎬 숏츠 자동화 프로그램</h1>
-            </div>
-            <!-- 헤더 액션 버튼들을 메뉴바로 이동 -->
-        </div>
-
+        
             <!-- 파일 업로드 섹션 -->
             <div class="upload-section" id="uploadContainer" onmouseenter="loadFileModules()">
                 <div class="upload-icon">📁</div>
@@ -674,6 +667,21 @@
                                 <option value="4:5">4:5 (인스타그램)</option>
                                 <option value="16:9">16:9 (가로형)</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <!-- 🚀 신규: 프로젝트 관리 섹션 -->
+                    <div class="project-management-section">
+                        <h3 class="section-title">
+                            <i class="fas fa-folder"></i> 프로젝트 관리
+                        </h3>
+                        <div class="project-actions">
+                            <button id="saveProjectBtn" class="project-btn save">
+                                <i class="fas fa-save"></i> 프로젝트 저장
+                            </button>
+                            <button id="loadProjectBtn" class="project-btn load">
+                                <i class="fas fa-folder-open"></i> 프로젝트 불러오기
+                            </button>
                         </div>
                     </div>
 

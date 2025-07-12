@@ -1,7 +1,7 @@
 import * as DOM from './dom-elements.js';
 import { state } from './state.js'; // Import the central state
 
-function showUploadedFile(file) {
+export function showUploadedFile(file) {
     DOM.fileName.textContent = `파일명: ${file.name}`;
     DOM.fileSize.textContent = `파일 크기: ${(file.size / 1024 / 1024).toFixed(2)} MB`;
     DOM.fileInfo.style.display = 'block';
@@ -9,7 +9,7 @@ function showUploadedFile(file) {
     DOM.videoPreviewSection.style.display = 'flex';
 }
 
-function updateVideoControls(enabled) {
+export function updateVideoControls(enabled) {
     DOM.playBtn.disabled = !enabled;
     DOM.pauseBtn.disabled = !enabled;
     DOM.stopBtn.disabled = !enabled;

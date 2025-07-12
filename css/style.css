@@ -142,7 +142,7 @@
 
         .main-layout {
             display: grid;
-            grid-template-columns: 7fr 3fr; /* 7:3 鍮꾩쑉濡?議곗젙 */
+            grid-template-columns: 7fr 3fr; /* 7:3 비율로 조정 */
             gap: 2rem;
         }
 
@@ -574,15 +574,81 @@
         .process-btn:disabled {
             background: var(--btn-disabled-bg);
             cursor: not-allowed;
-            transform: none;
+            transform: translateY(0);
             box-shadow: none;
-            opacity: 0.6;
+        }
+
+        /* 🚀 신규: 프로젝트 관리 섹션 스타일 */
+        .project-management-section {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+            box-shadow: var(--card-shadow);
+        }
+
+        .project-management-section .section-title {
+            font-size: var(--text-lg);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .project-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+        }
+
+        .project-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: var(--text-base);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border: 1px solid transparent;
+        }
+
+        .project-btn.save {
+            background-color: var(--success-bg);
+            color: var(--success-text);
+            border-color: var(--success-color);
+        }
+
+        .project-btn.save:hover {
+            background-color: var(--success-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .project-btn.load {
+            background-color: var(--accent-light);
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .project-btn.load:hover {
+            background-color: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
         }
 
         /* 영상제작 UI 스타일 */
 
         .production-header {
             display: flex;
+            justify-content: space-between;
             align-items: stretch;
             gap: 0.75rem;
             margin-bottom: 0;
@@ -3555,11 +3621,13 @@
         
         /* 📝 자막 컨테이너 */
         .subtitle-results-container {
-            flex: 1;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            height: 400px; /* 고정 높이 또는 max-height를 사용할 수 있습니다. */
             overflow-y: auto;
-            padding: var(--spacing-lg);
-            background: var(--card-bg);
-            max-height: 500px; /* 최대 높이 제한 */
+            padding: var(--spacing-sm); /* 좌우 패딩을 줄여서 너비 확보 */
+            transition: all var(--transition-normal);
         }
         
         /* 📝 자막 플레이스홀더 */
@@ -3575,60 +3643,53 @@
         }
         
         .subtitle-placeholder-results .placeholder-icon {
-            font-size: 3rem;
+            font-size: 2.5rem;
             margin-bottom: var(--spacing-md);
-            opacity: 0.5;
         }
         
         .subtitle-placeholder-results p {
-            font-size: var(--text-base);
             font-weight: 500;
-            margin-bottom: var(--spacing-sm);
-            color: var(--text-primary);
+            font-size: var(--text-lg);
+            margin-bottom: var(--spacing-xs);
         }
         
         .subtitle-placeholder-results span {
             font-size: var(--text-sm);
-            color: var(--text-muted);
+            max-width: 80%;
+            margin: 0 auto;
         }
         
         /* 📝 자막 엔트리 스타일 */
         .subtitle-result-entry {
-            background: var(--upload-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
-            padding: var(--spacing-lg);
-            margin-bottom: var(--spacing-md);
-            transition: all var(--transition-normal);
-            position: relative;
+            display: flex;
+            align-items: baseline;
+            gap: var(--spacing-sm);
+            padding: 0.1rem var(--spacing-sm); /* 상하 패딩을 크게 줄임 */
+            border-radius: 8px;
+            margin-bottom: 0.1rem; /* 항목 간의 하단 마진을 크게 줄임 */
+            cursor: pointer;
+            transition: background-color var(--transition-fast);
+            border-bottom: 1px solid transparent;
         }
         
         .subtitle-result-entry:hover {
+            background-color: var(--upload-hover-bg);
             border-color: var(--accent-color);
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
         }
         
         .subtitle-result-entry .subtitle-source {
-            display: inline-block;
-            background: var(--accent-color);
-            color: white;
-            padding: var(--spacing-xs) var(--spacing-sm);
-            border-radius: 6px;
-            font-size: var(--text-xs);
-            font-weight: 600;
-            margin-bottom: var(--spacing-sm);
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            white-space: nowrap;
         }
         
         .subtitle-result-entry .subtitle-text {
-            color: var(--text-primary);
-            line-height: 1.2;
             font-size: var(--text-base);
-            white-space: pre-wrap;
-            word-break: break-word;
-            font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-            letter-spacing: 0.02em;
-            text-align: justify;
-            padding: var(--spacing-sm) 0;
+            color: var(--text-primary);
+            line-height: 1.5;
+            flex-grow: 1; /* 자막 텍스트가 남은 공간을 모두 차지하도록 설정 */
         }
         
         .subtitle-result-entry .subtitle-meta {

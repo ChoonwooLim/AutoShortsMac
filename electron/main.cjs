@@ -206,6 +206,70 @@ ipcMain.handle('get-all-api-keys', (event) => {
     }
 });
 
+// =================================================================
+// 🚀 신규: 프로젝트 저장 및 불러오기 IPC 핸들러
+// =================================================================
+
+// 프로젝트 저장 핸들러
+ipcMain.handle('save-project', async (event, projectData) => {
+  const mainWindow = BrowserWindow.getFocusedWindow();
+  if (!mainWindow) {
+    return { success: false, error: '메인 윈도우를 찾을 수 없습니다.' };
+  }
+
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: '프로젝트 저장',
+    defaultPath: `project-${Date.now()}.autoshorts`,
+    filters: [
+      { name: 'AutoShorts 프로젝트', extensions: ['autoshorts'] },
+      { name: '모든 파일', extensions: ['*'] }
+    ]
+  });
+
+  if (canceled) {
+    return { success: false, reason: 'cancelled' };
+  }
+
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(projectData, null, 2));
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('❌ 프로젝트 파일 저장 실패:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 프로젝트 불러오기 핸들러
+ipcMain.handle('load-project', async () => {
+  const mainWindow = BrowserWindow.getFocusedWindow();
+  if (!mainWindow) {
+    return { success: false, error: '메인 윈도우를 찾을 수 없습니다.' };
+  }
+
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: '프로젝트 불러오기',
+    properties: ['openFile'],
+    filters: [
+      { name: 'AutoShorts 프로젝트', extensions: ['autoshorts'] },
+      { name: '모든 파일', extensions: ['*'] }
+    ]
+  });
+
+  if (canceled || filePaths.length === 0) {
+    return { success: false, reason: 'cancelled' };
+  }
+
+  const filePath = filePaths[0];
+  try {
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    const projectData = JSON.parse(fileContent);
+    return { success: true, data: projectData, path: filePath };
+  } catch (error) {
+    console.error('❌ 프로젝트 파일 불러오기 실패:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 
 // 앱 준비 완료
 app.whenReady().then(() => {
@@ -229,9 +293,37 @@ app.on('window-all-closed', () => {
 
 // 메뉴 생성
 function createMenu() {
+    const isMac = process.platform === 'darwin';
+
     const template = [
+        // {appMenu}
+        ...(isMac ? [{
+            label: app.getName(), // app.name 대신 getName()을 사용하여 productName을 확실하게 가져옵니다.
+            submenu: [
+                {
+                    label: `About ${app.getName()}`,
+                    role: 'about'
+                },
+                { type: 'separator' },
+                { 
+                    label: '환경설정...',
+                    accelerator: 'CmdOrCtrl+,',
+                    click: () => {
+                        mainWindow.webContents.send('open-settings');
+                    }
+                },
+                { type: 'separator' },
+                { role: 'services', label: '서비스' },
+                { type: 'separator' },
+                { role: 'hide', label: '숨기기' },
+                { role: 'hideOthers', label: '다른 항목 숨기기' },
+                { role: 'unhide', label: '모두 보기' },
+                { type: 'separator' },
+                { role: 'quit', label: '종료' }
+            ]
+        }] : []),
         {
-            label: '파일',
+            label: 'File',
             submenu: [
                 {
                     label: '새 프로젝트',
@@ -259,20 +351,31 @@ function createMenu() {
                 },
                 { type: 'separator' },
                 {
-                    label: '설정',
-                    accelerator: 'CmdOrCtrl+,',
+                    label: '프로젝트 저장',
+                    accelerator: 'CmdOrCtrl+S',
                     click: () => {
-                        mainWindow.webContents.send('open-settings');
+                        mainWindow.webContents.send('save-project-triggered');
                     }
                 },
-                { type: 'separator' },
                 {
-                    label: '종료',
-                    accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
+                    label: '프로젝트 불러오기',
+                    accelerator: 'CmdOrCtrl+Shift+O',
                     click: () => {
-                        app.quit();
+                        mainWindow.webContents.send('load-project-triggered');
                     }
-                }
+                },
+                ...(isMac ? [] : [
+                    { type: 'separator' },
+                    {
+                        label: '설정',
+                        accelerator: 'CmdOrCtrl+,',
+                        click: () => {
+                            mainWindow.webContents.send('open-settings');
+                        }
+                    },
+                ]),
+                { type: 'separator' },
+                isMac ? { role: 'close', label: '창 닫기' } : { role: 'quit', label: '종료' }
             ]
         },
         {
@@ -309,6 +412,16 @@ function createMenu() {
                 { label: '전체화면', accelerator: 'F11', role: 'togglefullscreen' }
             ]
         },
+        ...(isMac ? [{
+            label: '창',
+            role: 'window',
+            submenu: [
+                { role: 'minimize', label: '최소화' },
+                { role: 'zoom', label: '확대/축소' },
+                { type: 'separator' },
+                { role: 'front', label: '모두 앞으로 가져오기' }
+            ]
+        }] : []),
         {
             label: '도구',
             submenu: [
@@ -337,19 +450,8 @@ function createMenu() {
         },
         {
             label: '도움말',
+            role: 'help',
             submenu: [
-                {
-                    label: 'AutoShorts 정보',
-                    click: () => {
-                        dialog.showMessageBox(mainWindow, {
-                            type: 'info',
-                            title: 'AutoShorts Desktop',
-                            message: 'AutoShorts Desktop',
-                            detail: `버전: 1.0.0\n\nAI 기반 자동 숏츠 제작 도구\n\n개발: Twinverse`,
-                            buttons: ['확인']
-                        });
-                    }
-                },
                 {
                     label: '키보드 단축키',
                     click: () => {
@@ -357,7 +459,7 @@ function createMenu() {
                             type: 'info',
                             title: '키보드 단축키',
                             message: '주요 단축키',
-                            detail: `새 프로젝트: Ctrl+N\n영상 열기: Ctrl+O\n설정: Ctrl+,\n작업 로그: Ctrl+L\n새로고침: Ctrl+R\n개발자 도구: F12\n전체화면: F11`,
+                            detail: `새 프로젝트: CmdOrCtrl+N\n영상 열기: CmdOrCtrl+O\n프로젝트 저장: CmdOrCtrl+S\n설정: CmdOrCtrl+,\n작업 로그: CmdOrCtrl+L\n새로고침: CmdOrCtrl+R\n개발자 도구: F12\n전체화면: F11`,
                             buttons: ['확인']
                         });
                     }
@@ -391,6 +493,16 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
 
 ipcMain.handle('shell-open-path', async (event, path) => {
     return await shell.openPath(path);
+});
+
+ipcMain.handle('fs-read-file', async (event, filePath) => {
+    try {
+        const data = fs.readFileSync(filePath);
+        return { success: true, data: data }; // Buffer를 반환합니다.
+    } catch (error) {
+        console.error('❌ 파일 읽기 실패:', error);
+        return { success: false, error: error.message };
+    }
 });
 
 ipcMain.handle('show-directory-dialog', async () => {

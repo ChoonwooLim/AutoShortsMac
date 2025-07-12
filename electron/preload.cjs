@@ -16,8 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
     showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
 
-    // 파일 시스템 API
-    writeFile: (filePath, data) => ipcRenderer.invoke('fs-write-file', filePath, data),
+    // 🚀 신규: 프로젝트 저장/불러오기 API와 파일 시스템 접근
+    saveProject: (data) => ipcRenderer.invoke('save-project', data),
+    loadProject: () => ipcRenderer.invoke('load-project'),
     readFile: (filePath) => ipcRenderer.invoke('fs-read-file', filePath),
     
     // 시스템 연동
@@ -44,14 +45,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         // 이벤트 리스너
     onNewProject: (callback) => ipcRenderer.on('new-project', callback),
     onFileSelected: (callback) => ipcRenderer.on('file-selected', callback),
-    onLoadProject: (callback) => ipcRenderer.on('load-project', callback),
-    onSaveProject: (callback) => ipcRenderer.on('save-project', callback),
     onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
     onOpenWorkLog: (callback) => ipcRenderer.on('open-work-log', callback),
     onOpenApiKeyManager: (callback) => ipcRenderer.on('open-api-key-manager', callback),
     onTestAIConnection: (callback) => ipcRenderer.on('test-ai-connection', callback),
     onToggleDarkMode: (callback) => ipcRenderer.on('toggle-dark-mode', callback),
     onThemeChanged: (callback) => ipcRenderer.on('theme-changed', callback),
+    onSaveProjectTriggered: (callback) => ipcRenderer.on('save-project-triggered', (event, ...args) => callback(...args)),
+    onLoadProjectTriggered: (callback) => ipcRenderer.on('load-project-triggered', (event, ...args) => callback(...args)),
     
     // 이벤트 리스너 제거
     removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),

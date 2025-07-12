@@ -1359,19 +1359,54 @@ function formatTimestamp(seconds) {
 }
 
 /**
+ * [신규] 불필요한 자막 세그먼트를 필터링하는 함수
+ * @param {Array} segments - 원본 자막 세그먼트 배열
+ * @returns {Array} - 필터링된 자막 세그먼트 배열
+ */
+function filterUnwantedSubtitles(segments) {
+    const unwantedTexts = [
+        "무시하고 실제 음성만 인식해주세요",
+        "실제 음성만 인식해주세요",
+        "자막 감사합니다", // Whisper에서 자주 나타나는 종료어 필터링
+        "시청해주셔서 감사합니다"
+    ];
+
+    return segments.filter(segment => {
+        const text = segment.text.trim();
+        if (!text) return false; // 비어 있는 텍스트 제외
+
+        for (const unwanted of unwantedTexts) {
+            if (text.includes(unwanted)) {
+                console.log(`🚫 필터링된 자막: "${text}" (사유: "${unwanted}" 포함)`);
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+/**
  * 타임스탬프가 있는 자막 세그먼트를 UI에 추가하고 전역 상태에 저장합니다.
  * @param {Array<object>} segments - 자막 세그먼트 배열. 각 객체는 start, end, text 속성을 가집니다.
  * @param {string} source - 자막 출처 (예: 'OpenAI Whisper')
  */
-function addSubtitleEntryWithTimestamp(segments, source) {
+export function addSubtitleEntryWithTimestamp(segments, source) {
     if (!segments || segments.length === 0) {
-        console.warn('⚠️ 타임스탬프 자막 세그먼트가 비어있습니다.');
+        console.warn('⚠️ 타임스탬프와 함께 추가할 세그먼트가 없습니다.');
         return;
     }
 
+    // [수정] 필터링 함수 호출
+    const filteredSegments = filterUnwantedSubtitles(segments);
+
+    if (filteredSegments.length === 0) {
+        console.log('✅ 모든 자막이 필터링되어 추가할 내용이 없습니다.');
+        return;
+    }
+    
     // 1. 전역 상태(state)에 자막 데이터 저장
     //    구조: [{ start: 0.0, end: 3.5, text: "안녕하세요" }, ...]
-    state.subtitles = segments.map(seg => ({
+    state.subtitles = filteredSegments.map(seg => ({
         start: parseFloat(seg.start),
         end: parseFloat(seg.end),
         text: seg.text.trim()
@@ -1398,8 +1433,8 @@ function addSubtitleEntryWithTimestamp(segments, source) {
     const resultEntry = document.createElement('div');
     resultEntry.className = 'subtitle-result-entry timestamped'; // 타임스탬프 스타일 추가
 
-    const totalSentences = segments.reduce((acc, seg) => acc + countSentences(seg.text), 0);
-    const totalLength = segments.reduce((acc, seg) => acc + seg.text.length, 0);
+    const totalSentences = filteredSegments.reduce((acc, seg) => acc + countSentences(seg.text), 0);
+    const totalLength = filteredSegments.reduce((acc, seg) => acc + seg.text.length, 0);
     
     let contentHTML = `
         <div class="subtitle-source">
@@ -1413,7 +1448,7 @@ function addSubtitleEntryWithTimestamp(segments, source) {
         <div class="subtitle-text">
     `;
 
-    segments.forEach(segment => {
+    filteredSegments.forEach(segment => {
         const start = formatTimestamp(segment.start);
         const end = formatTimestamp(segment.end);
         contentHTML += `
@@ -1428,7 +1463,7 @@ function addSubtitleEntryWithTimestamp(segments, source) {
         </div>
         <div class="subtitle-meta">
             <span>추출 시간: ${new Date().toLocaleString()}</span>
-            <span>길이: ${totalLength}자 • ${segments.length}개 세그먼트 • ${totalSentences}개 문장</span>
+            <span>길이: ${totalLength}자 • ${filteredSegments.length}개 세그먼트 • ${totalSentences}개 문장</span>
         </div>
     `;
 
@@ -1443,12 +1478,12 @@ function addSubtitleEntryWithTimestamp(segments, source) {
     console.log(`✅ 타임스탬프 자막 UI 업데이트 완료`);
 
     // 이벤트 리스너 추가 (이벤트 위임 사용)
-    resultEntry.querySelector('.copy-btn').addEventListener('click', () => copySubtitles(segments));
-    resultEntry.querySelector('.save-btn').addEventListener('click', () => saveSubtitlesAsSrt(segments, source));
+    resultEntry.querySelector('.copy-btn').addEventListener('click', () => copySubtitles(filteredSegments));
+    resultEntry.querySelector('.save-btn').addEventListener('click', () => saveSubtitlesAsSrt(filteredSegments, source));
     resultEntry.querySelector('.delete-btn').addEventListener('click', () => resultEntry.remove());
 
     // 자막 생성 완료 이벤트 호출
-    onSubtitleGenerated(segments.map(s => s.text).join('\n'));
+    onSubtitleGenerated(filteredSegments.map(s => s.text).join('\n'));
 }
 
 function copySubtitles(segments) {
