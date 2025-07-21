@@ -378,7 +378,11 @@ export async function callAI(modelKey, subModel, systemPrompt, userMessage, imag
         throw new Error("알 수 없는 AI 모델 키입니다.");
     }
     if (!modelData.apiKey) {
-        throw new Error(`${modelData.name} API 키가 설정되지 않았습니다. 설정 메뉴에서 API 키를 입력해주세요.`);
+        const apiKey = await getApiKey(modelKey);
+        if (!apiKey) {
+            throw new Error(`${modelData.name} API 키가 설정되지 않았습니다. 설정 메뉴에서 API 키를 입력해주세요.`);
+        }
+        modelData.apiKey = apiKey;
     }
 
     try {
@@ -399,6 +403,9 @@ export async function callAI(modelKey, subModel, systemPrompt, userMessage, imag
         throw new Error(`${modelData.name} API 호출 중 오류가 발생했습니다: ${error.message}`);
     }
 }
+
+// callAI를 전역으로 노출
+window.callAI = callAI;
 
 // --- Google Auth ---
 let gapiInited = false;

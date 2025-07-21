@@ -3,6 +3,9 @@ import { callAI, aiModels, testAIConnection } from './api.js';
 import { state, workLogManager } from './state.js';
 import { collectProgramContext, formatContextForAI, extractVideoFrames } from './program-context.js';
 
+// 전역에서 접근 가능하도록 일부 함수 노출
+window.addSystemMessageToChat = addSystemMessageToChat;
+
 // 디바운스 함수 추가
 function debounce(func, delay) {
     let timeout;
@@ -344,7 +347,23 @@ export async function handleSendMessage() {
         }
         
         // 시스템 프롬프트 구성 (프로그램 컨텍스트 포함)
-        let systemPrompt = `
+        let systemPrompt;
+        const isSubtitleAnalysisRequest = userInput && (userInput.includes('자막') && (userInput.includes('분석') || userInput.includes('정리') || userInput.includes('요약')));
+
+        if (isSubtitleAnalysisRequest) {
+            systemPrompt = `
+당신은 AutoShorts 프로그램의 AI 어시스턴트입니다. 사용자가 **자막 분석**을 요청했습니다.
+
+📋 **현재 작업:**
+- 오직 '현재 프로그램 상황'에 제공된 **자막 내용**만을 분석하고 요약하여 답변해주세요.
+- 사용자가 명시적으로 요청하지 않는 한, 영상 편집, 숏츠 제작 제안, 또는 기타 조언을 절대 먼저 제공하지 마세요.
+- 답변은 자막 내용에 기반해야 합니다.
+
+📊 **현재 프로그램 상황:**
+${contextText}
+            `.trim();
+        } else {
+            systemPrompt = `
 당신은 AutoShorts 영상 편집 프로그램의 AI 어시스턴트입니다.
 
 📋 핵심 역할:
@@ -363,7 +382,8 @@ ${contextText}
 - 플랫폼이 선택된 경우 해당 플랫폼 최적화 조언
 - 설정값들을 고려한 실용적인 가이드 제공
 - 사용자의 작업 흐름을 이해하고 다음 단계 제안
-        `.trim();
+                    `.trim();
+        }
         
         // 이전 대화 내용 추가 (최근 3개만)
         const previousMessages = currentChat.messages.slice(-6, -1); // 최근 3쌍의 대화
@@ -417,6 +437,51 @@ ${contextText}
     }
 }
 
+/**
+ * 시스템 메시지를 현재 대화에 추가하는 함수
+ * @param {string} content - 추가할 메시지 내용
+ * @param {string} [title] - 메시지 상단에 표시될 제목 (옵션)
+ */
+export function addSystemMessageToChat(content, title = '시스템 메시지') {
+    const currentChat = state.chats.find(c => c.id === state.currentChatId);
+    if (!currentChat) {
+        console.error('현재 활성화된 대화가 없어 시스템 메시지를 추가할 수 없습니다.');
+        return;
+    }
+
+    const messageData = {
+        role: 'ai', // 시스템 메시지도 AI 역할로 처리
+        content: `**${title}**\n\n${content}`,
+        isSystem: true // 시스템 메시지임을 구분하는 플래그
+    };
+
+    currentChat.messages.push(messageData);
+    
+    // UI에 메시지 추가
+    const messageEl = document.createElement('div');
+    messageEl.className = 'chat-message ai-message system-message'; // 시스템 메시지용 클래스 추가
+
+    let formattedContent = content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/```([\s\S]*?)```/g, (match, p1) => `<pre><code>${p1.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>`)
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+
+    messageEl.innerHTML = `
+        <div class="avatar">⚙️</div>
+        <div class="message-content">
+            <p><strong>${title}</strong></p>
+            <p>${formattedContent}</p>
+        </div>
+    `;
+
+    DOM.chatHistory.appendChild(messageEl);
+    DOM.chatHistory.scrollTop = DOM.chatHistory.scrollHeight;
+
+    console.log(`⚙️ 시스템 메시지 추가: "${title}"`);
+}
+
+
 export function updateSendButtonState() {
     const hasText = DOM.chatInput.value.trim() !== '';
     const hasImage = !!currentUploadedImage;
@@ -465,7 +530,7 @@ export async function handleVideoAnalysisRequest() {
     await handleSendMessage();
 }
 
-// 대화 제목 편집 기능들
+// 대화 제목 편짓 기능들
 export function startEditChatTitle(chatId) {
     const titleSpan = document.querySelector(`.chat-list-item-title[data-chat-id="${chatId}"]`);
     const titleInput = document.querySelector(`.chat-title-edit-input[data-chat-id="${chatId}"]`);
@@ -478,7 +543,7 @@ export function startEditChatTitle(chatId) {
     titleInput.focus();
     titleInput.select();
     
-    // 편집 모드 표시를 위한 클래스 추가
+    // 편짓 모드 표시를 위한 클래스 추가
     titleInput.parentElement.classList.add('editing');
 }
 
@@ -525,7 +590,7 @@ function finishEditChatTitle(chatId) {
     titleSpan.style.display = 'inline';
     titleInput.style.display = 'none';
     
-    // 편집 모드 클래스 제거
+    // 편짓 모드 클래스 제거
     titleInput.parentElement.classList.remove('editing');
 }
 
@@ -783,7 +848,7 @@ export function setupChatEventListeners() {
         }
     });
 
-    // 대화 제목 편집 이벤트 리스너들
+    // 대화 제목 편짓 이벤트 리스너들
     DOM.chatList.addEventListener('dblclick', (e) => {
         const titleSpan = e.target.closest('.chat-list-item-title');
         if (titleSpan) {
@@ -794,7 +859,7 @@ export function setupChatEventListeners() {
         }
     });
 
-    // 제목 편집 입력 필드 이벤트들 (이벤트 위임 사용)
+    // 제목 편짓 입력 필드 이벤트들 (이벤트 위임 사용)
     DOM.chatList.addEventListener('keydown', (e) => {
         const titleInput = e.target.closest('.chat-title-edit-input');
         if (!titleInput) return;
@@ -819,7 +884,7 @@ export function setupChatEventListeners() {
         saveChatTitle(chatId, titleInput.value);
     }, true); // true로 설정하여 캡처 단계에서 처리
 
-    // 제목 편집 중 다른 곳 클릭 방지
+    // 제목 편짓 중 다른 곳 클릭 방지
     DOM.chatList.addEventListener('click', (e) => {
         const editingInput = DOM.chatList.querySelector('.chat-title-edit-input[style*="block"]');
         if (editingInput && !e.target.closest('.chat-title-edit-input')) {

@@ -200,131 +200,56 @@ function determineCompressionLevel(fileSizeMB, durationMinutes, originalSampleRa
 
 // 🔄 리팩토링: AudioUtils 사용으로 중복 코드 제거
 async function extractAudioWithWebAPI(file) {
-    console.log(`🎵 Web Audio API로 스마트 오디오 추출: ${file.name}`);
-    updatePlaceholder('🎵 브라우저 Web Audio API로 스마트 압축 처리 중...');
-    
-    try {
-        // 1. 파일을 ArrayBuffer로 읽기
-        const arrayBuffer = await file.arrayBuffer();
-        const fileSizeMB = arrayBuffer.byteLength / (1024 * 1024);
-        console.log(`📊 파일 크기: ${fileSizeMB.toFixed(1)}MB`);
-        
-        // 2. 🔄 리팩토링: AudioUtils 사용 (안전한 로딩)
-        updatePlaceholder('🔄 오디오 데이터 디코딩 중...');
-        
-        // AudioUtils가 로드되지 않았다면 로드 (백업용 - main.js에서 이미 로드됨)
-        if (!window.audioUtils) {
-            console.log('🔄 AudioUtils 백업 로드 중... (main.js에서 미리 로드되지 않음)');
-            updateTranscriptionProgress(15, '🔄 오디오 유틸리티 로드 중...', 'AudioUtils 모듈 초기화');
-            
-            try {
-                // AudioUtils 동적 로드
-                const audioUtilsModule = await import('./utils/audio-utils.js');
-                window.audioUtils = audioUtilsModule.default || audioUtilsModule;
-                
-                // AudioUtils 로드 확인
-                if (!window.audioUtils || typeof window.audioUtils.decodeAudioData !== 'function') {
-                    throw new Error('AudioUtils 모듈이 올바르게 로드되지 않았습니다');
-                }
-                
-                console.log('✅ AudioUtils 백업 로드 완료 - 바로 계속 진행합니다');
-            } catch (loadError) {
-                console.error('❌ AudioUtils 로드 실패:', loadError);
-                throw new Error('오디오 처리 모듈을 로드할 수 없습니다. 브라우저를 새로고침해주세요.');
-            }
-        } else {
-            console.log('✅ AudioUtils 이미 로드됨 - 바로 처리 시작');
-        }
-        
-        // AudioUtils 메서드 존재 확인
-    if (!window.audioUtils || typeof window.audioUtils.decodeAudioData !== 'function') {
-        throw new Error('AudioUtils의 decodeAudioData 함수를 찾을 수 없습니다');
+    if (!file) {
+        throw new Error("영상 파일이 없습니다.");
     }
-    
-    const audioBuffer = await window.audioUtils.decodeAudioData(arrayBuffer);
+
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const arrayBuffer = await file.arrayBuffer();
         
-        console.log(`✅ 오디오 디코딩 성공: ${audioBuffer.duration.toFixed(1)}초, ${audioBuffer.sampleRate}Hz`);
+        updateTranscriptionProgress(25, '🎧 오디오 디코딩 중...', '영상 파일에서 음성 데이터 분석');
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        updateTranscriptionProgress(30, '🎵 오디오 데이터 추출 중...', '고품질 모노 채널로 변환');
+        const channelData = audioBuffer.getChannelData(0); // 모노 채널
         
-        // 4. 모노 채널로 변환 (필요시)
-        const channelData = audioBuffer.getChannelData(0); // 첫 번째 채널 사용
+        const targetSampleRate = Math.min(audioBuffer.sampleRate, 16000);
+        console.log(`🎚️ 오디오 리샘플링: ${audioBuffer.sampleRate}Hz → ${targetSampleRate}Hz`);
         
-        // 5. 🔄 리팩토링: AudioUtils 압축 수준 결정 사용
-        const durationMinutes = audioBuffer.duration / 60;
-        
-        console.log(`📊 원본 분석: ${fileSizeMB.toFixed(2)}MB, ${durationMinutes.toFixed(1)}분, ${audioBuffer.sampleRate}Hz`);
-        
-        // 🔄 리팩토링: AudioUtils 압축 수준 결정 사용
-        let compression;
-        if (window.audioUtils && typeof window.audioUtils.determineCompressionLevel === 'function') {
-            compression = window.audioUtils.determineCompressionLevel(fileSizeMB, durationMinutes, audioBuffer.sampleRate);
-        } else {
-            console.warn('⚠️ AudioUtils.determineCompressionLevel를 찾을 수 없어 기본값 사용');
-            compression = { targetSampleRate: 16000, compressionLevel: '표준 압축', quality: '균형 최적화' };
+        const resampledData = resampleAudio(channelData, audioBuffer.sampleRate, targetSampleRate);
+
+        console.log('압축 및 분할 로직 개선: 전체를 MP3로 먼저 압축합니다.');
+        updateTranscriptionProgress(40, '🎵 MP3 압축 중...', '전체 오디오를 고품질 MP3로 변환하여 정확도를 높입니다.');
+
+        // FFmpeg를 사용하여 전체 오디오를 MP3로 압축
+        const compressedMp3Blob = await compressWithFFmpegWasm(resampledData, targetSampleRate);
+        const compressedSizeMB = compressedMp3Blob.size / (1024 / 1024);
+
+        console.log(`✅ 전체 MP3 압축 완료: ${compressedSizeMB.toFixed(2)}MB`);
+        updateTranscriptionProgress(60, '🗜️ 압축 완료', `전체 크기: ${compressedSizeMB.toFixed(2)}MB`);
+
+        // OpenAI Whisper의 경우 25MB 미만이면 분할하지 않음
+        const openaiLimit = 24 * 1024 * 1024; // 24MB로 안전 마진 설정
+        if (compressedMp3Blob.size < openaiLimit) {
+            console.log('✅ 파일 크기가 작아 분할이 필요 없습니다. 전체 파일을 사용합니다.');
+            updateTranscriptionProgress(65, '✅ 분할 불필요', '정확도 최상으로 처리');
+            return [{
+                blob: compressedMp3Blob,
+                startTime: 0,
+                duration: audioBuffer.duration
+            }];
         }
-        const { targetSampleRate, compressionLevel, quality } = compression;
-        
-        console.log(`🎛️ Google STT 최적화 압축 분석:`);
-        console.log(`   📊 원본: ${audioBuffer.sampleRate}Hz → ${targetSampleRate}Hz`);
-        console.log(`   🎚️ 수준: ${compressionLevel} (${quality})`);
-        console.log(`   💾 예상 압축률: ${((audioBuffer.sampleRate / targetSampleRate) * 100).toFixed(0)}%`);
-        console.log(`   🎯 Google STT 호환성: ${targetSampleRate <= 8000 ? '최적화됨' : '일반'}`);
-        
-        updatePlaceholder(`🎛️ ${compressionLevel} 적용 중... (${quality})`);
-        
-            // 6. 🔄 리팩토링: AudioUtils 리샘플링 사용
-    let resampledData;
-    if (window.audioUtils && typeof window.audioUtils.resampleAudio === 'function') {
-        resampledData = window.audioUtils.resampleAudio(channelData, audioBuffer.sampleRate, targetSampleRate);
-    } else {
-        console.warn('⚠️ AudioUtils.resampleAudio를 찾을 수 없어 원본 데이터 사용');
-        resampledData = channelData;
-    } // 폴백: 원본 데이터 사용
-        
-        // 7. 선택된 방식으로 압축 변환
-        const selectedCompressionMethod = getSelectedCompressionMethod();
-        console.log(`🎵 ${selectedCompressionMethod} 압축 변환 시작...`);
-        updateTranscriptionProgress(40, `🎵 ${selectedCompressionMethod} 압축 변환 중...`, '90% 크기 감소 예상 - 잠시만 기다려주세요');
-        updatePlaceholder(`🎵 ${selectedCompressionMethod} 압축 변환 중... (90% 크기 감소 예상)`);
-        
-        const compressedBlob = await convertToCompressedAudio(resampledData, targetSampleRate, selectedCompressionMethod);
-        
-        // 🔄 리팩토링: AudioUtils 압축 분석 사용
-        const originalSizeMB = (resampledData.length * 2) / (1024 * 1024); // Float32Array 크기
-        const compressedSizeMB = compressedBlob.size / (1024 * 1024);
-        let compressionRatio;
-        if (window.audioUtils && typeof window.audioUtils.calculateCompressionRatio === 'function') {
-            compressionRatio = window.audioUtils.calculateCompressionRatio(originalSizeMB * 1024 * 1024, compressedBlob.size);
-        } else {
-            compressionRatio = `${(((originalSizeMB * 1024 * 1024 - compressedBlob.size) / (originalSizeMB * 1024 * 1024)) * 100).toFixed(1)}%`;
-        }
-        
-        console.log(`🎵 ${selectedCompressionMethod} 압축 완료: ${originalSizeMB.toFixed(2)}MB → ${compressedSizeMB.toFixed(2)}MB (${compressionRatio}% 감소)`);
-        updateTranscriptionProgress(60, `✅ ${selectedCompressionMethod} 압축 완료`, `${originalSizeMB.toFixed(2)}MB → ${compressedSizeMB.toFixed(2)}MB (${compressionRatio}% 감소)`);
-        updatePlaceholder(`✅ ${selectedCompressionMethod} 압축 완료: ${compressedSizeMB.toFixed(2)}MB (${compressionRatio}% 감소)`);
-        
-        // 8. 압축된 파일 기반 스마트 분할 수행
-        console.log(`📊 ${selectedCompressionMethod} Google STT 호환성: ${compressedSizeMB <= 9.5 ? '✅ 분할 불필요' : '⚠️ 분할 필요'}`);
-        
-        const chunks = await splitAudioBlob(compressedBlob, audioBuffer.duration);
-        
-        console.log(`✅ ${selectedCompressionMethod} 기반 스마트 분할 완료:`);
-        console.log(`   📦 조각 수: ${chunks.length}개`);
-        console.log(`   🎵 품질: ${targetSampleRate}Hz ${selectedCompressionMethod} (${compressionLevel})`);
-        console.log(`   📊 Google STT 호환성: ${compressedSizeMB <= 9.5 ? '✅ 완벽 호환' : '⚠️ 추가 분할 필요'}`);
-        console.log(`   🎯 ${selectedCompressionMethod} 압축: ${compressionRatio}% 크기 감소로 최적화`);
-        
-        updatePlaceholder(`✅ ${selectedCompressionMethod} 압축 분할 완료: ${chunks.length}개 조각 (${compressionRatio}% 감소)`);
-        
-        return chunks;
-        
+
+        // 압축 후에도 크기가 크면 스마트 분할 수행
+        console.log(`⚠️ 압축 후에도 파일이 큽니다 (${compressedSizeMB.toFixed(2)}MB). 스마트 분할을 시작합니다.`);
+        updateTranscriptionProgress(65, '⚠️ 파일 분할 중...', '크기가 커서 최소한으로 분할합니다.');
+        return await splitAudioBlob(compressedMp3Blob, audioBuffer.duration);
+
     } catch (error) {
-        console.error('❌ Web Audio API 처리 실패:', error);
-        
-        if (error.name === 'EncodingError' || error.message.includes('decode')) {
-            throw new Error(`지원되지 않는 오디오 형식입니다.\n\n💡 해결방법:\n1. MP4, WebM, OGG 형식 사용\n2. 다른 영상 파일 시도\n3. 영상에 오디오 트랙이 있는지 확인`);
-        } else {
-            throw new Error(`오디오 처리 실패: ${error.message}\n\n🔧 해결방법:\n1. 브라우저 새로고침\n2. 파일 크기 확인 (100MB 이하 권장)\n3. 다른 브라우저 시도`);
-        }
+        console.error('오디오 추출 및 압축 중 오류 발생:', error);
+        updateTranscriptionProgress(100, '❌ 오디오 처리 실패', error.message);
+        throw new Error(`오디오 처리 중 오류: ${error.message}`);
     }
 }
 
@@ -1886,7 +1811,7 @@ export function setupSimpleTranscriptionEventListeners() {
         }
     }
     
-    // �� 더미 자막 생성 버튼 이벤트 리스너
+    // 🧪 더미 자막 생성 버튼 이벤트 리스너
     const generateDummyBtn = document.getElementById('generateDummySubtitleBtn');
     if (generateDummyBtn) {
         eventManager.addEventListener(generateDummyBtn, 'click', function() {

@@ -163,6 +163,56 @@ class TranscriptionUtils {
     }
 
     /**
+     * AI를 사용하여 자막을 요약하고 대화창에 표시합니다.
+     * @param {string} transcript - 요약할 전체 자막 텍스트
+     */
+    async summarizeAndDisplay(transcript) {
+        if (!transcript || transcript.length < 50) { // 너무 짧은 텍스트는 요약하지 않음
+            console.log('ℹ️ 텍스트가 너무 짧아 요약하지 않습니다.');
+            return;
+        }
+
+        console.log(`🤖 AI 자막 요약 시작... (텍스트 길이: ${transcript.length}자)`);
+
+        try {
+            // 현재 선택된 AI 모델 가져오기 (ui-chat.js의 DOM 참조)
+            const mainModelSelect = document.getElementById('main-model-select');
+            const subModelSelect = document.getElementById('sub-model-select');
+
+            if (!mainModelSelect || !subModelSelect) {
+                console.warn('⚠️ AI 모델 선택기를 찾을 수 없어 요약을 건너뜁니다.');
+                return;
+            }
+
+            const modelKey = mainModelSelect.value;
+            const subModel = subModelSelect.value;
+
+            const systemPrompt = `You are a professional AI assistant specializing in video content. Your task is to read the entire provided transcript from a video and create a concise, high-quality summary in Korean. The summary should be 3-5 sentences and capture the main topics and flow of the entire video from beginning to end. Do not omit key information.`;
+            const userMessage = `Here is the full transcript. Please provide a summary in Korean.\n\n---\nTRANSCRIPT START\n---\n\n${transcript}\n\n---\nTRANSCRIPT END\n---`;
+
+            // api.js의 callAI 함수 직접 호출
+            if (window.callAI) {
+                const summary = await window.callAI(modelKey, subModel, systemPrompt, userMessage);
+                
+                // ui-chat.js의 함수를 사용하여 대화창에 표시
+                if (window.addSystemMessageToChat) {
+                    window.addSystemMessageToChat(summary, '자막 요약');
+                    console.log('✅ AI 요약 완료 및 대화창에 표시');
+                } else {
+                    console.warn('⚠️ addSystemMessageToChat 함수를 찾을 수 없습니다.');
+                }
+            } else {
+                console.warn('⚠️ callAI 함수를 찾을 수 없습니다.');
+            }
+        } catch (error) {
+            console.error('❌ 자막 요약 중 오류 발생:', error);
+            if (window.addSystemMessageToChat) {
+                window.addSystemMessageToChat(`자막 요약에 실패했습니다: ${error.message}`, '오류');
+            }
+        }
+    }
+
+    /**
      * 개별 조각 결과 처리
      * @param {Object|string} result 음성 인식 결과
      * @param {Array} results 전체 결과 배열
@@ -214,6 +264,9 @@ class TranscriptionUtils {
                 console.log(`🎉 자막 추출 성공: ${fullTranscript.length}자`);
             }
             
+            // AI 요약 기능 호출
+            this.summarizeAndDisplay(fullTranscript);
+
             // UIUtils 플레이스홀더 업데이트
             if (window.uiUtils) {
                 window.uiUtils.updatePlaceholder('✅ 자막 추출 완료!');
