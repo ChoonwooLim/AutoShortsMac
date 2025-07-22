@@ -147,6 +147,21 @@ export function collectProgramContext() {
             identities: [...new Set(state.faceResults.map(f => f.faceId))].slice(0, 5).join(', ') + (state.faceResults.length > 5 ? ' 등' : '')
         };
     }
+    
+    // V2 얼굴 분석 데이터 추가
+    if (state.v2FaceAnalysis && state.v2FaceAnalysis.status === 'completed' && state.v2FaceAnalysis.actors.length > 0) {
+        context.v2FaceAnalysis = {
+            status: '완료',
+            actors: state.v2FaceAnalysis.actors.map(actor => ({
+                id: actor.id,
+                label: actor.label,
+                gender: actor.gender,
+                avgAge: Math.round(actor.avgAge),
+                totalAppearances: actor.totalAppearances,
+                appearances: actor.appearances, // AI가 동선 파악에 활용할 수 있도록 타임라인 정보 포함
+            }))
+        };
+    }
 
     return context;
 }
@@ -269,6 +284,18 @@ export function formatContextForAI(context) {
         contextText += `👥 **얼굴 분석 결과:**\n`;
         contextText += `- 인식된 인물 수: ${context.faceResults.count}명\n`;
         contextText += `- 주요 인물 ID: ${context.faceResults.identities}\n\n`;
+    }
+    
+    // V2 얼굴 분석 결과
+    if (context.v2FaceAnalysis) {
+        contextText += `🎭 **V2 얼굴 분석 결과 (전문가 모드):**\n`;
+        contextText += `- **상태:** ${context.v2FaceAnalysis.status}\n`;
+        contextText += `- **식별된 주요 인물:**\n`;
+        context.v2FaceAnalysis.actors.forEach(actor => {
+            contextText += `  - **${actor.label}**: 추정 ${actor.gender}, 약 ${actor.avgAge}세. 총 ${actor.totalAppearances}회 등장.\n`;
+        });
+        contextText += `\n`;
+        contextText += `💡 **AI 활용 Tip:** "인물 #1의 동선을 알려줘" 또는 "2번 인물이 주로 어떤 행동을 해?" 와 같이 질문하여 특정 인물의 행동을 분석할 수 있습니다.\n\n`;
     }
     
     // 선택된 플랫폼

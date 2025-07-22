@@ -11,6 +11,37 @@ export const state = {
     /** @type {Array<object>} */
     faceResults: [],
     
+    /**
+     * @typedef {object} Actor
+     * @property {string} id
+     * @property {string} label
+     * @property {string} image
+     * @property {string} gender
+     * @property {number} avgAge
+     * @property {object} emotionSummary
+     * @property {number} totalAppearances
+     * @property {number[]} appearances
+     * @property {object[]} detections
+     */
+
+    /**
+     * @typedef {object} FaceAnalysisV2State
+     * @property {'idle' | 'analyzing' | 'completed' | 'error'} status - 분석 상태
+     * @property {string | null} error - 오류 메시지
+     * @property {number} progress - 분석 진행률 (0-100)
+     * @property {string} progressText - 진행 상태 텍스트
+     * @property {Actor[]} actors - 분석된 인물 목록
+     */
+
+    /** @type {FaceAnalysisV2State} */
+    v2FaceAnalysis: {
+        status: 'idle',
+        error: null,
+        progress: 0,
+        progressText: '',
+        actors: [],
+    },
+
     /** @type {Array<object>} */
     chats: [],
 

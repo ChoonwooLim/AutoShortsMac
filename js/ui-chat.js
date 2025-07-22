@@ -349,6 +349,11 @@ export async function handleSendMessage() {
         // 시스템 프롬프트 구성 (프로그램 컨텍스트 포함)
         let systemPrompt;
         const isSubtitleAnalysisRequest = userInput && (userInput.includes('자막') && (userInput.includes('분석') || userInput.includes('정리') || userInput.includes('요약')));
+        
+        const isPersonAnalysisRequest = userInput && 
+            (userInput.includes('인물') || userInput.includes('사람') || userInput.includes('누구') || userInput.includes('그는') || userInput.includes('그녀는')) &&
+            programContext.v2FaceAnalysis;
+
 
         if (isSubtitleAnalysisRequest) {
             systemPrompt = `
@@ -361,6 +366,22 @@ export async function handleSendMessage() {
 
 📊 **현재 프로그램 상황:**
 ${contextText}
+            `.trim();
+        } else if (isPersonAnalysisRequest) {
+            systemPrompt = `
+당신은 AutoShorts 프로그램의 전문 영상 분석 AI 어시스턴트입니다. 사용자가 **특정 인물의 행동 및 동선 분석**을 요청했습니다.
+
+🎯 **최우선 임무:**
+- 'V2 얼굴 분석 결과'에 제공된 인물 정보와 등장 시간(타임라인) 데이터를 **반드시** 활용하여 답변해야 합니다.
+- 사용자가 질문한 인물(예: '1번 인물', '그 남자')이 영상 속에서 어떤 행동을 하고, 어떤 역할을 수행하는지 구체적으로 분석하고 설명해주세요.
+- 필요하다면, 각 인물의 등장 시간 정보를 바탕으로 여러 장면에 걸친 행동의 변화나 스토리 라인을 추론하여 설명해주세요.
+
+📊 **현재 프로그램 상황:**
+${contextText}
+
+💡 **지침:**
+- "인물 #1은 15초, 45초, 1분 10초에 등장합니다. 15초에는 웃고 있고, 45초에는 심각한 표정으로 문서를 보고 있으며..." 와 같이 시간대별로 구체적인 행동을 묘사해주세요.
+- 단순히 정보를 나열하는 것을 넘어, 인물의 행동을 종합하여 영상의 전체적인 스토리나 분위기 파악에 도움을 주는 답변을 구성해주세요.
             `.trim();
         } else {
             systemPrompt = `

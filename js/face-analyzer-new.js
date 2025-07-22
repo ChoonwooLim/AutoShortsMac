@@ -1,7 +1,7 @@
 // js/face-analyzer-new.js
 // "세계 최고"를 지향하는 전문가용 얼굴 분석 엔진
 
-import { state } from './state.js';
+import { state, workLogManager } from './state.js';
 
 const MODEL_URL = './models';
 let modelsLoaded = false;
@@ -19,12 +19,23 @@ let mergeControls; // 병합 버튼 컨테이너
 
 let currentActors = []; // 현재 분석된 인물 목록을 저장할 변수
 
+function updateState(newState) {
+    Object.assign(state.v2FaceAnalysis, newState);
+    console.log('Face analysis state updated:', state.v2FaceAnalysis);
+}
+
 /**
  * 전문가 분석에 필요한 모든 AI 모델(나이/성별, 표정 포함)을 로드합니다.
  */
 async function loadModels() {
     if (modelsLoaded) return true;
-    progressText.textContent = '전문가용 분석 모델 로딩 중...';
+    
+    const progressPayload = {
+        progressText: '전문가용 분석 모델 로딩 중...',
+        progress: 0
+    };
+    updateState(progressPayload);
+    progressText.textContent = progressPayload.progressText;
     progressContainer.style.display = 'block';
 
     try {
@@ -41,6 +52,7 @@ async function loadModels() {
         return true;
     } catch (error) {
         console.error('❌ V2(전문가) 모델 로딩 실패:', error);
+        updateState({ status: 'error', error: '모델 로딩에 실패했습니다.' });
         alert('얼굴 분석 모델 로딩에 실패했습니다. 인터넷 연결을 확인해주세요.');
         return false;
     }
@@ -55,6 +67,9 @@ function displayResults(actors, duration) {
     resultsContainer.innerHTML = '';
     currentActors = actors; // 분석 결과를 전역 변수에 저장
 
+    // 중앙 상태 업데이트
+    updateState({ actors: actors, status: 'completed', progress: 100 });
+    
     if (actors.length === 0) {
         resultsContainer.innerHTML = '<p style="text-align: center; color: #888;">영상에서 인물을 찾지 못했습니다.</p>';
         mergeControls.style.display = 'none'; // 결과 없으면 병합 버튼 숨김
@@ -196,6 +211,9 @@ function handleMerge() {
         // 새로운 인물 목록으로 UI 업데이트
         const newActorList = [mergedActor, ...remainingActors];
         displayResults(newActorList, videoEl.duration);
+        
+        // 작업 로그 추가
+        workLogManager.addWorkLog('face-analysis', `인물 병합: ${actorsToMerge.map(a => a.label).join(', ')} -> ${mergedActor.label}`);
     };
 }
 
@@ -209,6 +227,9 @@ export async function startAnalysis() {
         return;
     }
     isAnalyzing = true;
+    
+    updateState({ status: 'analyzing', progress: 0, progressText: '분석 준비 중...', actors: [], error: null });
+
 
     // 1. UI 초기화
     videoEl = document.getElementById('videoPreview');
@@ -231,6 +252,7 @@ export async function startAnalysis() {
 
     if (!state.uploadedFile || !videoEl.src) {
         alert('먼저 동영상 파일을 업로드해주세요.');
+        updateState({ status: 'error', error: '동영상 파일이 없습니다.'});
         isAnalyzing = false;
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = '얼굴 분석 (V2)';
@@ -240,6 +262,7 @@ export async function startAnalysis() {
 
     // 2. 모델 로드
     if (!await loadModels()) {
+        updateState({ status: 'idle' }); // 에러는 loadModels에서 처리
         isAnalyzing = false;
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = '얼굴 분석 (V2)';
@@ -285,12 +308,16 @@ export async function startAnalysis() {
         });
 
         const progress = (time / videoEl.duration) * 100;
+        const progressTextContent = `정밀 분석 중... (${Math.round(progress)}%)`;
+        
         progressBarFill.style.width = `${progress}%`;
-        progressText.textContent = `정밀 분석 중... (${Math.round(progress)}%)`;
+        progressText.textContent = progressTextContent;
+        updateState({ progress: progress, progressText: progressTextContent });
     }
 
     if (allDetections.length === 0) {
         displayResults([], videoEl.duration);
+        updateState({ status: 'completed' });
         isAnalyzing = false;
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = '얼굴 분석 (V2)';
@@ -299,7 +326,10 @@ export async function startAnalysis() {
     }
 
     // 5. 정교한 인물 식별 클러스터링
-    progressText.textContent = '탐지된 얼굴 그룹화 시작...';
+    const clusteringProgressText = '탐지된 얼굴 그룹화 시작...';
+    progressText.textContent = clusteringProgressText;
+    updateState({ progressText: clusteringProgressText });
+
     const actors = [];
     const DISTANCE_THRESHOLD = 0.5; // 유사도 기준 (낮을수록 엄격)
 
@@ -311,8 +341,10 @@ export async function startAnalysis() {
         let minDistance = 1;
 
         const progress = ((index + 1) / totalDetections) * 100;
+        const progressTextContent = `얼굴 그룹화 진행 중... (${index + 1}/${totalDetections})`;
         progressBarFill.style.width = `${progress}%`;
-        progressText.textContent = `얼굴 그룹화 진행 중... (${index + 1}/${totalDetections})`;
+        progressText.textContent = progressTextContent;
+        updateState({ progress: progress, progressText: progressTextContent });
 
         for (let i = 0; i < actors.length; i++) {
             const dist = faceapi.euclideanDistance(detection.descriptor, actors[i].avgDescriptor);
@@ -343,7 +375,10 @@ export async function startAnalysis() {
     }
 
     // 6. 데이터 집계 및 Best Shot 대표 이미지 추출
-    progressText.textContent = '최종 데이터 집계 시작...';
+    const aggregationProgressText = '최종 데이터 집계 시작...';
+    progressText.textContent = aggregationProgressText;
+    updateState({ progressText: aggregationProgressText });
+
     const finalActors = [];
 
     progressBarFill.style.width = '0%';
@@ -351,8 +386,11 @@ export async function startAnalysis() {
 
     for (const [index, actor] of actors.entries()) {
         const progress = ((index + 1) / totalActors) * 100;
+        const progressTextContent = `인물별 Best Shot 선정 및 정보 정리 중... (${index + 1}/${totalActors}명)`;
         progressBarFill.style.width = `${progress}%`;
-        progressText.textContent = `인물별 Best Shot 선정 및 정보 정리 중... (${index + 1}/${totalActors}명)`;
+        progressText.textContent = progressTextContent;
+        updateState({ progress: progress, progressText: progressTextContent });
+
 
         const bestDetection = actor.detections.reduce((best, current) =>
             current.detection.box.area > best.detection.box.area ? current : best
@@ -408,6 +446,7 @@ export async function startAnalysis() {
 
     // 7. 결과 표시 및 정리
     displayResults(finalActors, videoEl.duration);
+    workLogManager.addWorkLog('face-analysis', `V2 얼굴 분석 완료: ${finalActors.length}명 식별`);
     isAnalyzing = false;
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = '얼굴 분석 (V2)';
