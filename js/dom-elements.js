@@ -1,4 +1,4 @@
-export const themeToggle = document.getElementById('theme-toggle');
+export const themeToggle = document.getElementById('themeToggle');
 
 // Upload related
 export const uploadContainer = document.getElementById('uploadContainer');

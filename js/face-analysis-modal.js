@@ -37,9 +37,9 @@ async function loadFaceApiModels() {
             console.log('🔧 사용 중인 백엔드:', tf.getBackend());
         }
 
-        domElements.analysisProgress.style.display = 'block';
-        domElements.faceProgressText.textContent = '얼굴 분석 AI 모델을 로딩 중입니다...';
-        domElements.faceProgressFill.style.width = '0%';
+    domElements.analysisProgress.style.display = 'block';
+    domElements.faceProgressText.textContent = '얼굴 분석 AI 모델을 로딩 중입니다...';
+    domElements.faceProgressFill.style.width = '0%';
 
         await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         domElements.faceProgressFill.style.width = '20%';

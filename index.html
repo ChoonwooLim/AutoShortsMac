@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoShorts Desktop</title>
+    <title>AutoShorts Web</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" type="image/x-icon" href="image/AutoShortsIco.ico">
     
@@ -37,6 +37,10 @@
      </script>
 </head>
 <body>
+    <header class="main-header">
+        <h1>AutoShorts Web</h1>
+        <button id="themeToggle" class="theme-toggle-btn">🌙</button>
+    </header>
     <div class="main-layout">
         <!-- 왼쪽 패널: 설정 및 컨트롤 -->
         <div class="left-panel">
@@ -53,6 +57,11 @@
                 </div>
             </div>
 
+            <!-- 새 영상 로드 버튼 (업로드 후 표시) -->
+            <div class="new-video-section" id="newVideoSection" style="display: none;">
+                <button id="loadNewVideoButton" class="action-btn">🔄️ 새 영상 불러오기</button>
+            </div>
+            
             <!-- 원본 영상 미리보기 (업로드 후 표시) -->
             <div class="video-preview-section" id="videoPreviewSection" style="display: none;">
                 <div class="video-main-container">
@@ -885,6 +894,12 @@
     
     <!-- 🎛️ 옵션 모달 관리 -->
     <script type="module" src="js/ui-options-modal.js"></script>
+    
+    <!-- 🎨 테마 관리 -->
+    <script type="module" src="js/ui-theme.js"></script>
+
+    <!-- 📁 파일 관리 -->
+    <script type="module" src="js/ui-file.js"></script>
     
     <!-- 📦 나머지 모듈들은 지연 로딩으로 처리 -->
     <script type="module" src="js/main.js"></script>

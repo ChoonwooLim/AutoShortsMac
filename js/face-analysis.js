@@ -78,10 +78,10 @@ function updateProgressBar(progress, text) {
     
     // 기존 호환성 유지
     if (DOM.faceProgressFill) {
-        DOM.faceProgressFill.style.width = `${progress * 100}%`;
+    DOM.faceProgressFill.style.width = `${progress * 100}%`;
     }
     if (DOM.faceProgressText) {
-        DOM.faceProgressText.textContent = text || `${Math.round(progress * 100)}%`;
+    DOM.faceProgressText.textContent = text || `${Math.round(progress * 100)}%`;
     }
 }
 
@@ -229,7 +229,7 @@ export async function analyzeFaces(videoElement) {
     try {
         // 라이브러리와 모델이 로드되었는지 확인
         await waitForLibraries();
-        if (!modelsLoaded) {
+    if (!modelsLoaded) {
             await loadModels();
         }
     } catch (error) {
@@ -251,14 +251,14 @@ export async function analyzeFaces(videoElement) {
     }
     
     if (DOM.analysisProgress) {
-        DOM.analysisProgress.style.display = 'block';
+    DOM.analysisProgress.style.display = 'block';
         console.log('✅ 분석 진행바 표시');
     } else {
         console.error('❌ analysisProgress DOM 요소를 찾을 수 없습니다');
     }
     
     if (DOM.faceResults) {
-        DOM.faceResults.innerHTML = '';
+    DOM.faceResults.innerHTML = '';
         console.log('✅ 결과 영역 초기화');
     } else {
         console.error('❌ faceResults DOM 요소를 찾을 수 없습니다');
@@ -319,8 +319,8 @@ export async function analyzeFaces(videoElement) {
             if (detections.length > 0) {
                 try {
                     detections = await faceapi.detectAllFaces(tempCanvas, options)
-                        .withFaceLandmarks()
-                        .withFaceDescriptors();
+            .withFaceLandmarks()
+            .withFaceDescriptors();
                     console.log(`✅ 프레임 ${i+1}: 얼굴 특징점 추출 완료`);
                 } catch (landmarkError) {
                     console.warn(`⚠️ 프레임 ${i+1} 특징점 추출 실패, 기본 감지만 사용:`, landmarkError);

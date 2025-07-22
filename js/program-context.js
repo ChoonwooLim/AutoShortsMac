@@ -147,7 +147,7 @@ export function collectProgramContext() {
             identities: [...new Set(state.faceResults.map(f => f.faceId))].slice(0, 5).join(', ') + (state.faceResults.length > 5 ? ' 등' : '')
         };
     }
-    
+
     // V2 얼굴 분석 데이터 추가
     if (state.v2FaceAnalysis && state.v2FaceAnalysis.status === 'completed' && state.v2FaceAnalysis.actors.length > 0) {
         context.v2FaceAnalysis = {

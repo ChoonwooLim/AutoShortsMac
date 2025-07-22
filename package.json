@@ -1,29 +1,17 @@
 {
-  "name": "AutoShortsDesktop",
-  "productName": "AutoShorts",
+  "name": "autoshorts-web",
+  "productName": "AutoShorts Web",
   "version": "1.0.6",
-  "description": "AutoShorts Desktop Application",
+  "description": "AutoShorts Web Application",
   "type": "module",
-  "main": "electron/main.cjs",
   "homepage": "./",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
-    "electron-pack": "npm run build && electron-builder",
-    "electron-dist": "npm run build && electron-builder --publish=never",
-    "postinstall": "electron-builder install-app-deps"
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0",
-    "cross-env": "^7.0.3",
-    "electron": "^33.3.1",
-    "electron-builder": "^26.0.12",
-    "terser": "^5.43.1",
-    "vite": "^7.0.2",
-    "wait-on": "^8.0.3"
+    "vite": "^7.0.2"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
@@ -33,85 +21,6 @@
     "d3-scale": "^4.0.2",
     "face-api.js": "^0.22.2",
     "@tensorflow/tfjs": "1.7.4",
-    "natural": "^5.0.0",
-    "node-fetch": "^3.3.2"
-  },
-  "overrides": {
-    "face-api.js": {
-      "node-fetch": ">=2.6.7"
-    },
-    "tfjs-image-recognition-base": {
-      "node-fetch": ">=2.6.7"
-    }
-  },
-  "build": {
-    "appId": "com.twinverse.autoshorts",
-    "productName": "AutoShorts Desktop",
-    "copyright": "Copyright © 2024 Twinverse",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "image/**/*",
-      "public/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "public/ffmpeg",
-        "to": "ffmpeg"
-      },
-      {
-        "from": "public/models",
-        "to": "models"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "verifyUpdateCodeSignature": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "image/AutoShortsIco.ico",
-      "uninstallerIcon": "image/AutoShortsIco.ico",
-      "installerHeaderIcon": "image/AutoShortsIco.ico",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "AutoShorts Desktop"
-    },
-    "mac": {
-      "icon": "image/AutoShortsIco.ico",
-      "category": "public.app-category.video",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "icon": "image/AutoShortsIco.ico",
-      "category": "Video",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    }
+    "natural": "^5.0.0"
   }
 }
