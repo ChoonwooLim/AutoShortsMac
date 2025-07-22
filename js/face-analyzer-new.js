@@ -14,6 +14,10 @@ let progressText;
 let progressBarFill;
 let resultsContainer;
 let analyzeBtn;
+let mergeBtn; // 병합 버튼 UI 요소 추가
+let mergeControls; // 병합 버튼 컨테이너
+
+let currentActors = []; // 현재 분석된 인물 목록을 저장할 변수
 
 /**
  * 전문가 분석에 필요한 모든 AI 모델(나이/성별, 표정 포함)을 로드합니다.
@@ -49,10 +53,16 @@ async function loadModels() {
  */
 function displayResults(actors, duration) {
     resultsContainer.innerHTML = '';
+    currentActors = actors; // 분석 결과를 전역 변수에 저장
+
     if (actors.length === 0) {
         resultsContainer.innerHTML = '<p style="text-align: center; color: #888;">영상에서 인물을 찾지 못했습니다.</p>';
+        mergeControls.style.display = 'none'; // 결과 없으면 병합 버튼 숨김
         return;
     }
+
+    mergeControls.style.display = 'block'; // 결과 있으면 병합 버튼 표시
+    mergeBtn.disabled = true;
 
     actors.sort((a, b) => b.totalAppearances - a.totalAppearances);
 
@@ -68,7 +78,11 @@ function displayResults(actors, duration) {
 
         const actorCard = document.createElement('div');
         actorCard.className = 'face-card professional';
+        actorCard.dataset.actorId = actor.id; // 각 카드에 고유 ID 부여
         actorCard.innerHTML = `
+            <div class="face-card-selection">
+                <input type="checkbox" class="actor-checkbox" data-actor-id="${actor.id}">
+            </div>
             <img src="${actor.image}" alt="${actor.label}" class="face-card-img">
             <div class="face-card-content">
                 <div class="face-card-header">
@@ -99,7 +113,92 @@ function displayResults(actors, duration) {
             }
         });
     });
+
+    // 체크박스 변경 감지 이벤트
+    resultsContainer.querySelectorAll('.actor-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            const selectedCount = resultsContainer.querySelectorAll('.actor-checkbox:checked').length;
+            mergeBtn.disabled = selectedCount < 2;
+
+            // 선택된 카드에 시각적 효과 적용
+            const card = checkbox.closest('.face-card');
+            if (checkbox.checked) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        });
+    });
 }
+
+/**
+ * 선택된 인물들을 병합하는 함수
+ */
+function handleMerge() {
+    const selectedCheckboxes = resultsContainer.querySelectorAll('.actor-checkbox:checked');
+    if (selectedCheckboxes.length < 2) {
+        alert('병합하려면 두 명 이상의 인물을 선택해야 합니다.');
+        return;
+    }
+
+    const selectedActorIds = Array.from(selectedCheckboxes).map(cb => cb.dataset.actorId);
+    
+    // 선택된 인물과 선택되지 않은 인물 분리
+    const actorsToMerge = currentActors.filter(actor => selectedActorIds.includes(actor.id));
+    const remainingActors = currentActors.filter(actor => !selectedActorIds.includes(actor.id));
+
+    // 데이터 병합
+    const mergedDetections = actorsToMerge.flatMap(actor => actor.detections);
+    
+    // Best Shot 재선정 (가장 큰 얼굴)
+    const bestDetection = mergedDetections.reduce((best, current) => 
+        current.detection.box.area > best.detection.box.area ? current : best
+    );
+
+    // 병합된 인물의 새 대표 이미지 생성
+    const faceCanvas = document.createElement('canvas');
+    // ... (이미지 생성 로직은 startAnalysis 함수에서 가져와 재사용)
+    videoEl.currentTime = bestDetection.timestamp;
+    videoEl.onseeked = () => { // onseeked 콜백을 사용하여 비동기 처리
+        const { x, y, width, height } = bestDetection.detection.box;
+        const widthScale = 1.5, heightScale = 2.0;
+        const newWidth = width * widthScale, newHeight = height * heightScale;
+        let newX = x - (newWidth - width) / 2, newY = y - (newHeight - height) / 3;
+        newX = Math.max(0, newX);
+        newY = Math.max(0, newY);
+        const finalWidth = Math.min(newWidth, videoEl.videoWidth - newX);
+        const finalHeight = Math.min(newHeight, videoEl.videoHeight - newY);
+        faceCanvas.width = finalWidth;
+        faceCanvas.height = finalHeight;
+        faceCanvas.getContext('2d').drawImage(videoEl, newX, newY, finalWidth, finalHeight, 0, 0, finalWidth, finalHeight);
+
+        // 병합된 인물의 정보 재계산
+        const gender = mergedDetections.map(d => d.gender).sort((a,b) => mergedDetections.filter(v => v.gender===a).length - mergedDetections.filter(v => v.gender===b).length).pop();
+        const avgAge = mergedDetections.reduce((sum, d) => sum + d.age, 0) / mergedDetections.length;
+        const emotionSummary = {};
+        mergedDetections.forEach(d => {
+            const topEmotion = Object.keys(d.expressions).reduce((a, b) => d.expressions[a] > d.expressions[b] ? a : b);
+            emotionSummary[topEmotion] = (emotionSummary[topEmotion] || 0) + 1;
+        });
+
+        const mergedActor = {
+            id: `actor-${Date.now()}-${Math.random()}`,
+            label: actorsToMerge[0].label, // 첫 번째 선택된 인물의 이름 사용 (추후 편집 기능 추가 가능)
+            image: faceCanvas.toDataURL(),
+            gender: gender === 'male' ? '남성' : '여성',
+            avgAge: avgAge,
+            emotionSummary: emotionSummary,
+            totalAppearances: mergedDetections.length,
+            appearances: mergedDetections.map(d => d.timestamp).sort((a,b) => a - b),
+            detections: mergedDetections
+        };
+
+        // 새로운 인물 목록으로 UI 업데이트
+        const newActorList = [mergedActor, ...remainingActors];
+        displayResults(newActorList, videoEl.duration);
+    };
+}
+
 
 /**
  * '전문가 모드' 얼굴 분석 프로세스
@@ -118,6 +217,11 @@ export async function startAnalysis() {
     progressBarFill = document.getElementById('progressBarFillV2');
     resultsContainer = document.getElementById('faceResultsV2');
     analyzeBtn = document.getElementById('analyzeFacesBtnV2');
+    mergeBtn = document.getElementById('mergeActorsBtn');
+    mergeControls = document.querySelector('.merge-controls');
+
+    // 병합 버튼 이벤트 리스너 추가
+    mergeBtn.addEventListener('click', handleMerge);
 
     resultsContainer.innerHTML = '<p style="text-align: center; color: #888;">전문가 분석을 시작합니다. 정확도를 위해 시간이 오래 소요될 수 있습니다...</p>';
     analyzeBtn.disabled = true;
@@ -130,6 +234,7 @@ export async function startAnalysis() {
         isAnalyzing = false;
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = '얼굴 분석 (V2)';
+        mergeControls.style.display = 'none';
         return;
     }
 
@@ -139,6 +244,7 @@ export async function startAnalysis() {
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = '얼굴 분석 (V2)';
         progressContainer.style.display = 'none';
+        mergeControls.style.display = 'none';
         return;
     }
 
@@ -228,6 +334,7 @@ export async function startAnalysis() {
         } else {
             // 새로운 인물 발견
             actors.push({
+                id: `actor-${Date.now()}-${Math.random()}`, // 고유 ID 생성
                 label: `인물 #${actors.length + 1}`,
                 detections: [detection],
                 avgDescriptor: detection.descriptor,
@@ -287,13 +394,15 @@ export async function startAnalysis() {
         });
 
         finalActors.push({
+            id: actor.id, // ID 유지
             label: actor.label,
             image: faceCanvas.toDataURL(),
             gender: gender === 'male' ? '남성' : '여성',
             avgAge: avgAge,
             emotionSummary: emotionSummary,
             totalAppearances: actor.detections.length,
-            appearances: actor.detections.map(d => d.timestamp).sort((a,b) => a - b)
+            appearances: actor.detections.map(d => d.timestamp).sort((a,b) => a - b),
+            detections: actor.detections // 원본 데이터 유지
         });
     }
 

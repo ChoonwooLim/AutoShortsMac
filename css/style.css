@@ -4348,9 +4348,41 @@
         /* --- Face Analysis V2 Professional Styles --- */
 
         .face-card.professional {
+            position: relative; /* 체크박스 위치 설정을 위해 추가 */
             flex-direction: column;
-            gap: 0; /* 자식 요소 사이의 간격 제거 */
+            gap: 0;
             overflow: hidden; /* 카드를 벗어나는 이미지 숨김 */
+            border: 2px solid transparent; /* 선택 상태를 위한 테두리 공간 확보 */
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* 카드 위에 마우스를 올렸을 때 & 체크박스 보이기 */
+        .face-card.professional:hover .face-card-selection {
+            opacity: 1;
+        }
+
+        .face-card-selection {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            opacity: 0; /* 평소에는 숨김 */
+            transition: opacity 0.2s ease-in-out;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            padding: 5px;
+        }
+
+        .actor-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        /* 선택된 카드 스타일 */
+        .face-card.professional.selected {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color);
         }
 
         .face-card.professional .face-card-img {
