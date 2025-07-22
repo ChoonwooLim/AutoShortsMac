@@ -1,14 +1,45 @@
-const MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+const MODEL_URL = './models';
+
+// TensorFlow.js와 Face-api.js가 로드될 때까지 기다리는 함수
+async function waitForLibraries() {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 50; // 5초 대기
+        
+        const checkLibraries = () => {
+            attempts++;
+            
+            if (typeof tf !== 'undefined' && typeof faceapi !== 'undefined') {
+                console.log('✅ TensorFlow.js와 Face-api.js 로드 완료');
+                resolve();
+            } else if (attempts >= maxAttempts) {
+                reject(new Error('TensorFlow.js 또는 Face-api.js 로드 실패'));
+            } else {
+                setTimeout(checkLibraries, 100);
+            }
+        };
+        
+        checkLibraries();
+    });
+}
 
 async function loadFaceApiModels() {
     if (state.faceApiModelsLoaded) return;
 
-    domElements.analysisProgress.style.display = 'block';
-    domElements.faceProgressText.textContent = '얼굴 분석 AI 모델을 로딩 중입니다...';
-    domElements.faceProgressFill.style.width = '0%';
-
     try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        // 라이브러리 로드 대기
+        await waitForLibraries();
+        
+        // TensorFlow.js 백엔드 초기화 (3.x 버전)
+        await tf.ready();
+        console.log('🔧 TensorFlow.js 백엔드 초기화 완료');
+        console.log('🔧 사용 중인 백엔드:', tf.getBackend());
+
+        domElements.analysisProgress.style.display = 'block';
+        domElements.faceProgressText.textContent = '얼굴 분석 AI 모델을 로딩 중입니다...';
+        domElements.faceProgressFill.style.width = '0%';
+
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         domElements.faceProgressFill.style.width = '20%';
         await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
         domElements.faceProgressFill.style.width = '40%';

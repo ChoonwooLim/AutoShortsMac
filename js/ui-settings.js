@@ -308,7 +308,20 @@ async function handleSaveApiKey() {
     }
 }
 
+// 얼굴 분석 갤러리 초기화 함수
+function initializeFaceAnalysisGallery() {
+    // 얼굴 분석 체크박스가 기본적으로 체크되어 있으므로 갤러리도 표시
+    if (DOM.faceAnalysisCheckbox && DOM.faceGalleryContainer) {
+        const isChecked = DOM.faceAnalysisCheckbox.checked;
+        DOM.faceGalleryContainer.style.display = isChecked ? 'block' : 'none';
+        console.log(`🎭 얼굴 분석 갤러리 초기 상태: ${isChecked ? '표시' : '숨김'}`);
+    }
+}
+
 export function setupSettingsEventListeners() {
+    // 얼굴 분석 갤러리 초기화
+    initializeFaceAnalysisGallery();
+    
     // 모델 선택 이벤트 리스너
     if(DOM.mainModelSelect) DOM.mainModelSelect.addEventListener('change', updateSubModels);
     
@@ -433,6 +446,20 @@ export function setupSettingsEventListeners() {
     // 얼굴 분석 버튼 이벤트 리스너
     if (DOM.analyzeFacesBtn) {
         DOM.analyzeFacesBtn.addEventListener('click', async () => {
+            // 현재 버튼 텍스트로 상태 판단
+            const isAnalyzing = DOM.analyzeFacesBtn.textContent === '분석 중지';
+            
+            if (isAnalyzing) {
+                // 분석 중지
+                console.log('🛑 얼굴 분석 중지 요청');
+                const faceAnalysisModule = await import('./face-analysis.js');
+                if (faceAnalysisModule.stopFaceAnalysis) {
+                    faceAnalysisModule.stopFaceAnalysis();
+                }
+                return;
+            }
+            
+            // 분석 시작
             // state 확인 - import한 state 직접 사용
             if (!state.uploadedFile) {
                 alert('얼굴 분석을 시작하기 전에 먼저 영상을 업로드해주세요.');
@@ -443,10 +470,6 @@ export function setupSettingsEventListeners() {
             try {
                 console.log('🎭 얼굴 분석 시작...');
                 console.log('📹 업로드된 파일:', state.uploadedFile.name);
-                
-                // 버튼 상태 변경
-                DOM.analyzeFacesBtn.disabled = true;
-                DOM.analyzeFacesBtn.textContent = '분석 중...';
                 
                 // face-analysis 모듈 로드 및 분석 시작 (한 번에 처리)
                 const faceAnalysisModule = await import('./face-analysis.js');
@@ -470,10 +493,11 @@ export function setupSettingsEventListeners() {
             } catch (error) {
                 console.error('❌ 얼굴 분석 시작 실패:', error);
                 alert('얼굴 분석 시작 중 오류가 발생했습니다.');
-            } finally {
-                // 버튼 상태 복원
+                
+                // 오류 시 버튼 상태 복원
                 DOM.analyzeFacesBtn.disabled = false;
                 DOM.analyzeFacesBtn.textContent = '얼굴 분석 시작';
+                DOM.analyzeFacesBtn.style.backgroundColor = '';
             }
         });
     }

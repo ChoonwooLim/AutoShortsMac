@@ -10,6 +10,12 @@
     <!-- JSZip 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
+    <!-- TensorFlow.js (호환 버전) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+    
+    <!-- Face-api.js (호환 버전) -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    
     <!-- Google API는 필요시에만 로드하도록 변경 -->
     <script>
         // Google API 로딩 함수들을 전역으로 미리 정의
@@ -209,7 +215,7 @@
                 <input type="checkbox" id="addTitle" name="features" value="title">
                 <input type="checkbox" id="addSubtitles" name="features" value="subtitles">
                 <input type="checkbox" id="addEffects" name="features" value="effects">
-                <input type="checkbox" id="faceAnalysis" name="features" value="face_analysis">
+                <input type="checkbox" id="faceAnalysis" name="features" value="face_analysis" checked>
                 
                 <select id="shortsLength" class="setting-input">
                     <option value="15">15초</option>
@@ -454,7 +460,7 @@
                     </div>
                     <div class="modal-body">
                         <div class="modal-option-item">
-                            <input type="checkbox" id="modal-faceAnalysisEnable">
+                            <input type="checkbox" id="modal-faceAnalysisEnable" checked>
                             <label for="modal-faceAnalysisEnable">
                                 <div class="option-info">
                                     <div class="option-name">배우얼굴분석 활성화</div>
@@ -703,7 +709,7 @@
             </div>
 
             <!-- 배우 얼굴 갤러리 섹션 -->
-            <div class="face-gallery-container" id="faceGalleryContainer" style="display: none;">
+            <div class="face-gallery-container" id="faceGalleryContainer" style="display: block;">
                 <h3>🎭 배우 얼굴 갤러리</h3>
                 <div class="face-gallery-controls">
                     <button class="btn btn-secondary" id="analyzeFacesBtn" onclick="loadFaceAnalysisModules()">

@@ -22,7 +22,7 @@ const optionData = {
         addEffects: false
     },
     face: {
-        faceAnalysisEnable: false,
+        faceAnalysisEnable: true,
         faceTracking: false,
         expressionAnalysis: false,
         multiplePersons: false
