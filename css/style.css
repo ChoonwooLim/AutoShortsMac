@@ -4344,3 +4344,91 @@
         body.desktop-app * {
             backface-visibility: hidden;
         }
+
+        /* --- Face Analysis V2 Professional Styles --- */
+
+        .face-card.professional {
+            flex-direction: column;
+            gap: 0; /* 자식 요소 사이의 간격 제거 */
+        }
+
+        .face-card.professional:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+        }
+
+        .face-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--upload-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .face-card-header img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent-color);
+        }
+
+        .face-card-title {
+            flex: 1;
+        }
+
+        .face-card-title h4 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .face-card-title p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .face-card-body {
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        .face-card-body p {
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .face-card-body p strong {
+            color: var(--text-primary);
+        }
+
+        .timeline-container {
+            width: 100%;
+            height: 12px;
+            background-color: var(--border-color);
+            border-radius: 6px;
+            position: relative;
+            margin-top: 0.5rem;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            width: 8px;
+            height: 16px;
+            background-color: var(--accent-color);
+            border-radius: 4px;
+            top: -2px; /* 살짝 위로 튀어나오게 */
+            transform: translateX(-50%);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .timeline-marker:hover {
+            transform: translateX(-50%) scale(1.5);
+            background-color: var(--accent-hover);
+        }

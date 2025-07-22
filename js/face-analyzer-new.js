@@ -1,5 +1,7 @@
 // js/face-analyzer-new.js
-// face-api.js와 TensorFlow.js v1.7.4를 사용하는 새로운 독립 분석기
+// "세계 최고"를 지향하는 전문가용 얼굴 분석 엔진
+
+import { state } from './state.js';
 
 const MODEL_URL = './models';
 let modelsLoaded = false;
@@ -14,174 +16,274 @@ let resultsContainer;
 let analyzeBtn;
 
 /**
- * 필요한 모델을 로드합니다. 한 번만 실행됩니다.
+ * 전문가 분석에 필요한 모든 AI 모델(나이/성별, 표정 포함)을 로드합니다.
  */
 async function loadModels() {
     if (modelsLoaded) return true;
-    console.log('V2 - Loading models...');
-    progressText.textContent = 'AI 모델을 로딩 중입니다...';
+    progressText.textContent = '전문가용 분석 모델 로딩 중...';
     progressContainer.style.display = 'block';
+
     try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        console.log('⏳ V2(전문가) 모델 로딩 시작...');
+        await Promise.all([
+            faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+            faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL),
+            faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+        ]);
         modelsLoaded = true;
-        console.log('V2 - Models loaded successfully.');
+        console.log('✅ V2(전문가) 모델 로딩 완료.');
         return true;
     } catch (error) {
-        console.error('V2 - Error loading models:', error);
-        progressText.textContent = '오류: AI 모델 로딩 실패.';
+        console.error('❌ V2(전문가) 모델 로딩 실패:', error);
+        alert('얼굴 분석 모델 로딩에 실패했습니다. 인터넷 연결을 확인해주세요.');
         return false;
     }
 }
 
 /**
- * 분석 결과를 UI에 표시합니다.
- * @param {Array} actors - 감지된 배우 정보 배열
+ * 분석 결과를 전문가 수준의 UI로 화면에 표시합니다.
+ * @param {Array} actors - 분석된 배우 정보 배열
+ * @param {number} duration - 비디오 총 길이 (타임라인 생성용)
  */
-function displayResults(actors) {
+function displayResults(actors, duration) {
     resultsContainer.innerHTML = '';
     if (actors.length === 0) {
-        resultsContainer.innerHTML = '<p style="text-align: center; color: #888;">영상에서 얼굴을 찾지 못했습니다.</p>';
+        resultsContainer.innerHTML = '<p style="text-align: center; color: #888;">영상에서 인물을 찾지 못했습니다.</p>';
         return;
     }
 
-    actors.forEach(actor => {
-        const card = document.createElement('div');
-        card.className = 'face-card';
-        card.innerHTML = `
-            <div class="face-image-container" style="background-image: url('${actor.image}')"></div>
-            <div class="face-info">
-                <h4>${actor.label}</h4>
-                <p><strong>등장 횟수:</strong> ${actor.count}회</p>
+    actors.sort((a, b) => b.totalAppearances - a.totalAppearances);
+
+    actors.forEach((actor, index) => {
+        const emotions = Object.entries(actor.emotionSummary)
+            .sort(([, a], [, b]) => b - a)
+            .map(([emotion, count]) => `${emotion}(${count})`)
+            .join(', ');
+
+        const timelineMarkers = actor.appearances.map(time =>
+            `<div class="timeline-marker" style="left: ${(time / duration) * 100}%;" data-time="${time}"></div>`
+        ).join('');
+
+        const actorCard = document.createElement('div');
+        actorCard.className = 'face-card professional'; // 전문가용 클래스 추가
+        actorCard.innerHTML = `
+            <div class="face-card-header">
+                <img src="${actor.image}" alt="${actor.label}" />
+                <div class="face-card-title">
+                    <h4>${actor.label}</h4>
+                    <p>추정: ${actor.gender}, 약 ${Math.round(actor.avgAge)}세</p>
+                </div>
+            </div>
+            <div class="face-card-body">
+                <p><strong>총 등장 횟수:</strong> ${actor.totalAppearances}회</p>
+                <p><strong>주요 감정:</strong> ${emotions || '분석 정보 없음'}</p>
+                <p><strong>등장 타임라인:</strong></p>
+                <div class="timeline-container">${timelineMarkers}</div>
             </div>
         `;
-        resultsContainer.appendChild(card);
+        resultsContainer.appendChild(actorCard);
+    });
+
+    // 타임라인 마커에 클릭 이벤트 추가
+    resultsContainer.querySelectorAll('.timeline-marker').forEach(marker => {
+        marker.addEventListener('click', (e) => {
+            const time = parseFloat(e.target.dataset.time);
+            if (videoEl) {
+                videoEl.currentTime = time;
+                videoEl.play(); // 클릭 시 바로 재생
+                setTimeout(() => videoEl.pause(), 500); // 0.5초 후 정지
+            }
+        });
     });
 }
 
 /**
- * 분석을 시작하는 메인 함수
+ * '전문가 모드' 얼굴 분석 프로세스
  */
 export async function startAnalysis() {
     if (isAnalyzing) {
-        console.warn('V2 - Analysis is already in progress.');
+        alert('분석이 이미 진행 중입니다.');
         return;
     }
+    isAnalyzing = true;
 
-    // 1. UI 요소 초기화
+    // 1. UI 초기화
     videoEl = document.getElementById('videoPreview');
     progressContainer = document.getElementById('analysisProgressV2');
     progressText = document.getElementById('progressTextV2');
     progressBarFill = document.getElementById('progressBarFillV2');
     resultsContainer = document.getElementById('faceResultsV2');
     analyzeBtn = document.getElementById('analyzeFacesBtnV2');
-    
-    if (!videoEl || !videoEl.src) {
-        alert('얼굴 분석을 시작하기 전에 먼저 영상을 업로드해주세요.');
-        return;
-    }
 
-    isAnalyzing = true;
+    resultsContainer.innerHTML = '<p style="text-align: center; color: #888;">전문가 분석을 시작합니다. 정확도를 위해 시간이 오래 소요될 수 있습니다...</p>';
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = '분석 중...';
-    resultsContainer.innerHTML = '';
-    
-    // 2. 모델 로드
-    const modelsReady = await loadModels();
-    if (!modelsReady) {
+    progressBarFill.style.width = '0%';
+    progressContainer.style.display = 'block';
+
+    if (!state.uploadedFile || !videoEl.src) {
+        alert('먼저 동영상 파일을 업로드해주세요.');
         isAnalyzing = false;
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = '얼굴 분석 (V2)';
         return;
     }
 
-    // 3. 비디오 준비
-    if (videoEl.readyState < 2) {
-        progressText.textContent = '비디오 로딩 중...';
-        await new Promise(resolve => {
-            videoEl.onloadeddata = () => resolve();
-        });
+    // 2. 모델 로드
+    if (!await loadModels()) {
+        isAnalyzing = false;
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = '얼굴 분석 (V2)';
+        progressContainer.style.display = 'none';
+        return;
     }
 
-    // 4. 프레임 샘플링 및 분석
-    const videoDuration = videoEl.duration;
-    const sampleCount = Math.min(20, Math.floor(videoDuration)); // 샘플 수 줄임
-    const allDescriptors = [];
+    // 3. 비디오 준비
+    await new Promise(resolve => {
+        if (videoEl.readyState >= 2) return resolve();
+        videoEl.onloadeddata = () => resolve();
+    });
+    videoEl.pause();
+    videoEl.currentTime = 0;
+
+    // 4. 초고밀도 프레임 분석 (1초당 2프레임)
+    const SAMPLING_RATE_FPS = 2;
+    const interval = 1 / SAMPLING_RATE_FPS;
+    const allDetections = [];
+
     const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
     tempCanvas.width = videoEl.videoWidth;
     tempCanvas.height = videoEl.videoHeight;
-    const tempCtx = tempCanvas.getContext('2d');
 
-    for (let i = 0; i < sampleCount; i++) {
-        const currentTime = (i / (sampleCount - 1)) * videoDuration;
-        videoEl.currentTime = currentTime;
-        await new Promise(resolve => {
-            videoEl.onseeked = () => resolve();
-        });
-        
-        tempCtx.drawImage(videoEl, 0, 0);
-
-        const detections = await faceapi.detectAllFaces(tempCanvas).withFaceLandmarks().withFaceDescriptors();
-        detections.forEach(d => allDescriptors.push(d.descriptor));
-        
-        const progress = ((i + 1) / sampleCount) * 100;
-        progressBarFill.style.width = `${progress}%`;
-        progressText.textContent = `영상 분석 중... (${i + 1}/${sampleCount})`;
-    }
-    
-    // 5. 얼굴 그룹화
-    progressText.textContent = '얼굴 그룹화 중...';
-    const faceMatcher = new faceapi.FaceMatcher(allDescriptors, 0.5);
-    const actorGroups = {};
-    allDescriptors.forEach(descriptor => {
-        const bestMatch = faceMatcher.findBestMatch(descriptor);
-        const label = bestMatch.label;
-        if (!actorGroups[label]) {
-            actorGroups[label] = { label, count: 0, descriptors: [] };
-        }
-        actorGroups[label].count++;
-        actorGroups[label].descriptors.push(descriptor);
-    });
-
-    // 6. 대표 이미지 추출
-    progressText.textContent = '대표 이미지 추출 중...';
-    const actors = Object.values(actorGroups);
-    for (const actor of actors) {
-        // 대표 이미지를 추출하기 위해 비디오의 첫 프레임으로 이동
-        videoEl.currentTime = 0;
+    for (let time = 0; time < videoEl.duration; time += interval) {
+        videoEl.currentTime = time;
         await new Promise(resolve => { videoEl.onseeked = () => resolve(); });
 
-        const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks();
-         if(detection) {
-             const faceCanvas = faceapi.createCanvasFromMedia(videoEl);
-             // *** 중요 수정: videoEl.width -> videoEl.videoWidth 로 변경 ***
-             const displaySize = { width: videoEl.videoWidth, height: videoEl.videoHeight };
-             faceapi.matchDimensions(faceCanvas, displaySize);
-             
-             const resizedDetection = faceapi.resizeResults(detection, displaySize);
-             const { x, y, width, height } = resizedDetection.detection.box;
+        tempCtx.drawImage(videoEl, 0, 0, tempCanvas.width, tempCanvas.height);
 
-             const faceImageCanvas = document.createElement('canvas');
-             faceImageCanvas.width = width;
-             faceImageCanvas.height = height;
-             faceImageCanvas.getContext('2d').drawImage(videoEl, x, y, width, height, 0, 0, width, height);
-             actor.image = faceImageCanvas.toDataURL();
-         } else {
-             // Fallback: 얼굴을 찾지 못한 경우 비디오의 현재 프레임을 사용
-             const fallbackCanvas = document.createElement('canvas');
-             fallbackCanvas.width = 100;
-             fallbackCanvas.height = 100;
-             fallbackCanvas.getContext('2d').drawImage(videoEl, 0, 0, 100, 100);
-             actor.image = fallbackCanvas.toDataURL();
-         }
+        const detections = await faceapi
+            .detectAllFaces(tempCanvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withAgeAndGender()
+            .withFaceDescriptors();
+
+        detections.forEach(d => {
+            d.timestamp = time;
+            allDetections.push(d);
+        });
+
+        const progress = (time / videoEl.duration) * 100;
+        progressBarFill.style.width = `${progress}%`;
+        progressText.textContent = `정밀 분석 중... (${Math.round(progress)}%)`;
     }
-    
+
+    if (allDetections.length === 0) {
+        displayResults([], videoEl.duration);
+        isAnalyzing = false;
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = '얼굴 분석 (V2)';
+        progressContainer.style.display = 'none';
+        return;
+    }
+
+    // 5. 정교한 인물 식별 클러스터링
+    progressText.textContent = '탐지된 얼굴 그룹화 시작...';
+    const actors = [];
+    const DISTANCE_THRESHOLD = 0.5; // 유사도 기준 (낮을수록 엄격)
+
+    progressBarFill.style.width = '0%';
+    const totalDetections = allDetections.length;
+
+    for (const [index, detection] of allDetections.entries()) {
+        let bestMatch = null;
+        let minDistance = 1;
+
+        const progress = ((index + 1) / totalDetections) * 100;
+        progressBarFill.style.width = `${progress}%`;
+        progressText.textContent = `얼굴 그룹화 진행 중... (${index + 1}/${totalDetections})`;
+
+        for (let i = 0; i < actors.length; i++) {
+            const dist = faceapi.euclideanDistance(detection.descriptor, actors[i].avgDescriptor);
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestMatch = actors[i];
+            }
+        }
+
+        if (bestMatch && minDistance < DISTANCE_THRESHOLD) {
+            bestMatch.detections.push(detection);
+            // 그룹의 평균 특징을 계속 업데이트하여 정확도 향상
+            const newDescriptors = bestMatch.detections.map(d => d.descriptor);
+            const avgDescriptor = new Float32Array(newDescriptors[0].length);
+            for (let i = 0; i < avgDescriptor.length; i++) {
+                avgDescriptor[i] = newDescriptors.reduce((sum, desc) => sum + desc[i], 0) / newDescriptors.length;
+            }
+            bestMatch.avgDescriptor = avgDescriptor;
+        } else {
+            // 새로운 인물 발견
+            actors.push({
+                label: `인물 #${actors.length + 1}`,
+                detections: [detection],
+                avgDescriptor: detection.descriptor,
+            });
+        }
+    }
+
+    // 6. 데이터 집계 및 Best Shot 대표 이미지 추출
+    progressText.textContent = '최종 데이터 집계 시작...';
+    const finalActors = [];
+
+    progressBarFill.style.width = '0%';
+    const totalActors = actors.length;
+
+    for (const [index, actor] of actors.entries()) {
+        const progress = ((index + 1) / totalActors) * 100;
+        progressBarFill.style.width = `${progress}%`;
+        progressText.textContent = `인물별 Best Shot 선정 및 정보 정리 중... (${index + 1}/${totalActors}명)`;
+
+        const bestDetection = actor.detections.reduce((best, current) =>
+            current.detection.box.area > best.detection.box.area ? current : best
+        );
+
+        videoEl.currentTime = bestDetection.timestamp;
+        await new Promise(resolve => { videoEl.onseeked = () => resolve(); });
+
+        const faceCanvas = document.createElement('canvas');
+        const { x, y, width, height } = bestDetection.detection.box;
+        faceCanvas.width = width;
+        faceCanvas.height = height;
+        faceCanvas.getContext('2d').drawImage(videoEl, x, y, width, height, 0, 0, width, height);
+
+        const gender = actor.detections.map(d => d.gender).sort((a,b) => actor.detections.filter(v => v.gender===a).length - actor.detections.filter(v => v.gender===b).length).pop();
+        const avgAge = actor.detections.reduce((sum, d) => sum + d.age, 0) / actor.detections.length;
+
+        const emotionSummary = {};
+        actor.detections.forEach(d => {
+            const topEmotion = Object.keys(d.expressions).reduce((a, b) => d.expressions[a] > d.expressions[b] ? a : b);
+            emotionSummary[topEmotion] = (emotionSummary[topEmotion] || 0) + 1;
+        });
+
+        finalActors.push({
+            label: actor.label,
+            image: faceCanvas.toDataURL(),
+            gender: gender === 'male' ? '남성' : '여성',
+            avgAge: avgAge,
+            emotionSummary: emotionSummary,
+            totalAppearances: actor.detections.length,
+            appearances: actor.detections.map(d => d.timestamp).sort((a,b) => a - b)
+        });
+    }
+
     // 7. 결과 표시 및 정리
-    displayResults(actors);
+    displayResults(finalActors, videoEl.duration);
     isAnalyzing = false;
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = '얼굴 분석 (V2)';
     progressContainer.style.display = 'none';
-    progressBarFill.style.width = '0%';
+
+    console.log('✅ V2(전문가) 얼굴 분석 완료.');
 } 
