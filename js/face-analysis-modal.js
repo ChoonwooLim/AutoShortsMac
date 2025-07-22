@@ -30,10 +30,12 @@ async function loadFaceApiModels() {
         // 라이브러리 로드 대기
         await waitForLibraries();
         
-        // TensorFlow.js 백엔드 초기화 (3.x 버전)
-        await tf.ready();
-        console.log('🔧 TensorFlow.js 백엔드 초기화 완료');
-        console.log('🔧 사용 중인 백엔드:', tf.getBackend());
+        // TensorFlow.js 백엔드 초기화 (2.x 버전)
+        if (typeof tf !== 'undefined') {
+            await tf.ready();
+            console.log('🔧 TensorFlow.js 백엔드 초기화 완료');
+            console.log('🔧 사용 중인 백엔드:', tf.getBackend());
+        }
 
         domElements.analysisProgress.style.display = 'block';
         domElements.faceProgressText.textContent = '얼굴 분석 AI 모델을 로딩 중입니다...';

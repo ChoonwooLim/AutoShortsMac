@@ -37,10 +37,13 @@ export async function loadModels() {
         // 라이브러리 로드 대기
         await waitForLibraries();
         
-        // TensorFlow.js 백엔드 초기화 (3.x 버전)
-        await tf.ready();
-        console.log('🔧 TensorFlow.js 백엔드 초기화 완료');
-        console.log('🔧 사용 중인 백엔드:', tf.getBackend());
+        // TensorFlow.js 백엔드 초기화 (2.x 버전)
+        if (typeof tf !== 'undefined') {
+            await tf.setBackend('webgl');
+            await tf.ready();
+            console.log('🔧 TensorFlow.js 백엔드 초기화 완료');
+            console.log('🔧 사용 중인 백엔드:', tf.getBackend());
+        }
         
         // Face-api.js 모델 로드
         await Promise.all([
@@ -308,11 +311,22 @@ export async function analyzeFaces(videoElement) {
 
         let detections;
         try {
-            detections = await faceapi.detectAllFaces(tempCanvas, options)
-                .withFaceLandmarks()
-                .withFaceExpressions()
-                .withAgeAndGender()
-                .withFaceDescriptors();
+            // 단순한 얼굴 감지부터 시작
+            detections = await faceapi.detectAllFaces(tempCanvas, options);
+            console.log(`✅ 프레임 ${i+1}: ${detections.length}개 얼굴 감지됨`);
+            
+            // 추가 정보가 필요한 경우에만 단계적으로 추가
+            if (detections.length > 0) {
+                try {
+                    detections = await faceapi.detectAllFaces(tempCanvas, options)
+                        .withFaceLandmarks()
+                        .withFaceDescriptors();
+                    console.log(`✅ 프레임 ${i+1}: 얼굴 특징점 추출 완료`);
+                } catch (landmarkError) {
+                    console.warn(`⚠️ 프레임 ${i+1} 특징점 추출 실패, 기본 감지만 사용:`, landmarkError);
+                    // 기본 감지 결과만 사용
+                }
+            }
         } catch (error) {
             console.warn(`⚠️ 프레임 ${i+1} 얼굴 감지 실패:`, error);
             continue; // 이 프레임은 건너뛰고 다음 프레임으로

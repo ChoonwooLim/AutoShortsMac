@@ -89,7 +89,7 @@ async function main() {
         await Promise.all([
             initializeSettingsUI(),
             setupSettingsEventListeners() // setupSettingsEventListeners는 initializeSettingsUI와 함께 로드됨
-        ]);
+      ]);
         performanceMonitor.endModuleTimer('ui-initialization');
         console.log('✅ 기본 UI 설정 초기화 완료');
 
@@ -598,3 +598,20 @@ window.setTheme = function(theme) {
 
 // Run the main function when the document is ready.
 document.addEventListener('DOMContentLoaded', main);
+
+// V2 얼굴 분석 버튼 리스너 추가
+document.addEventListener('DOMContentLoaded', () => {
+    const analyzeBtnV2 = document.getElementById('analyzeFacesBtnV2');
+    if (analyzeBtnV2) {
+        analyzeBtnV2.addEventListener('click', async () => {
+            try {
+                const analyzer = await import('./face-analyzer-new.js');
+                analyzer.startAnalysis();
+            } catch (error) {
+                console.error('Failed to load or run V2 analysis:', error);
+                alert('새로운 얼굴 분석 기능을 실행하는 중 오류가 발생했습니다.');
+            }
+        });
+        console.log('✅ 얼굴 분석 (V2) 버튼 이벤트 리스너 설정 완료');
+    }
+});

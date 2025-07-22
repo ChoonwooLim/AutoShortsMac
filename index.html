@@ -10,10 +10,10 @@
     <!-- JSZip 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <!-- TensorFlow.js (호환 버전) -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+    <!-- TensorFlow.js (초안정 버전) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
     
-    <!-- Face-api.js (호환 버전) -->
+    <!-- Face-api.js (안정 버전) -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     
     <!-- Google API는 필요시에만 로드하도록 변경 -->
@@ -712,15 +712,8 @@
             <div class="face-gallery-container" id="faceGalleryContainer" style="display: block;">
                 <h3>🎭 배우 얼굴 갤러리</h3>
                 <div class="face-gallery-controls">
-                    <button class="btn btn-secondary" id="analyzeFacesBtn" onclick="loadFaceAnalysisModules()">
-                        🔍 얼굴 분석 시작
-                    </button>
-                    <button class="btn btn-primary" id="generateFaceImagesBtn" style="display: none;">
-                        🎨 AI 얼굴 그리기
-                    </button>
-                    <button class="btn btn-success" id="downloadFaceGalleryBtn" style="display: none;">
-                        📥 갤러리 다운로드
-                    </button>
+                    <button class="btn btn-secondary" id="analyzeFacesBtn">얼굴 분석 시작</button>
+                    <button class="btn btn-secondary" id="analyzeFacesBtnV2" style="background-color: #007bff; color: white;">얼굴 분석 (V2)</button>
                 </div>
                 <div style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
                     🎯 <strong>실제 얼굴 인식 시스템:</strong><br>
@@ -737,6 +730,20 @@
                 </div>
                 <div class="face-results" id="faceResults">
                     <!-- 분석된 얼굴들이 여기에 표시됩니다 -->
+                </div>
+            </div>
+
+            <!-- 배우 얼굴 갤러리 섹션 (V2) -->
+            <div class="face-gallery-container" id="faceGalleryContainerV2" style="display: block; margin-top: 20px; border-top: 1px solid #444; padding-top: 20px;">
+                <h3>🎭 배우 얼굴 갤러리 (V2)</h3>
+                <div id="faceResultsV2" class="face-results">
+                    <p style="text-align: center; color: #888;">새로운 얼굴 분석 결과를 여기에 표시합니다.</p>
+                </div>
+                <div id="analysisProgressV2" style="display: none; margin-top: 15px;">
+                    <p id="progressTextV2" style="text-align: center; margin-bottom: 5px;"></p>
+                    <div class="progress-bar" style="background-color: #555;">
+                        <div id="progressBarFillV2" class="progress-fill" style="width: 0%; background-color: #007bff;"></div>
+                    </div>
                 </div>
             </div>
 
