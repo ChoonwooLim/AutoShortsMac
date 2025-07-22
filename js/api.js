@@ -380,7 +380,7 @@ export async function callAI(modelKey, subModel, systemPrompt, userMessage, imag
     if (!modelData.apiKey) {
         const apiKey = await getApiKey(modelKey);
         if (!apiKey) {
-            throw new Error(`${modelData.name} API 키가 설정되지 않았습니다. 설정 메뉴에서 API 키를 입력해주세요.`);
+        throw new Error(`${modelData.name} API 키가 설정되지 않았습니다. 설정 메뉴에서 API 키를 입력해주세요.`);
         }
         modelData.apiKey = apiKey;
     }

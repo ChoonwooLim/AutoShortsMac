@@ -203,7 +203,7 @@ async function extractAudioWithWebAPI(file) {
     if (!file) {
         throw new Error("영상 파일이 없습니다.");
     }
-
+    
     try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const arrayBuffer = await file.arrayBuffer();
@@ -225,7 +225,7 @@ async function extractAudioWithWebAPI(file) {
         // FFmpeg를 사용하여 전체 오디오를 MP3로 압축
         const compressedMp3Blob = await compressWithFFmpegWasm(resampledData, targetSampleRate);
         const compressedSizeMB = compressedMp3Blob.size / (1024 / 1024);
-
+        
         console.log(`✅ 전체 MP3 압축 완료: ${compressedSizeMB.toFixed(2)}MB`);
         updateTranscriptionProgress(60, '🗜️ 압축 완료', `전체 크기: ${compressedSizeMB.toFixed(2)}MB`);
 
@@ -245,7 +245,7 @@ async function extractAudioWithWebAPI(file) {
         console.log(`⚠️ 압축 후에도 파일이 큽니다 (${compressedSizeMB.toFixed(2)}MB). 스마트 분할을 시작합니다.`);
         updateTranscriptionProgress(65, '⚠️ 파일 분할 중...', '크기가 커서 최소한으로 분할합니다.');
         return await splitAudioBlob(compressedMp3Blob, audioBuffer.duration);
-
+        
     } catch (error) {
         console.error('오디오 추출 및 압축 중 오류 발생:', error);
         updateTranscriptionProgress(100, '❌ 오디오 처리 실패', error.message);

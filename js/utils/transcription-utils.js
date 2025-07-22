@@ -266,7 +266,7 @@ class TranscriptionUtils {
             
             // AI 요약 기능 호출
             this.summarizeAndDisplay(fullTranscript);
-
+            
             // UIUtils 플레이스홀더 업데이트
             if (window.uiUtils) {
                 window.uiUtils.updatePlaceholder('✅ 자막 추출 완료!');
