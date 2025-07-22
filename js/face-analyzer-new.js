@@ -67,20 +67,22 @@ function displayResults(actors, duration) {
         ).join('');
 
         const actorCard = document.createElement('div');
-        actorCard.className = 'face-card professional'; // 전문가용 클래스 추가
+        actorCard.className = 'face-card professional';
         actorCard.innerHTML = `
-            <div class="face-card-header">
-                <img src="${actor.image}" alt="${actor.label}" />
-                <div class="face-card-title">
-                    <h4>${actor.label}</h4>
-                    <p>추정: ${actor.gender}, 약 ${Math.round(actor.avgAge)}세</p>
+            <img src="${actor.image}" alt="${actor.label}" class="face-card-img">
+            <div class="face-card-content">
+                <div class="face-card-header">
+                    <div class="face-card-title">
+                        <h4>${actor.label}</h4>
+                        <p>추정: ${actor.gender}, 약 ${Math.round(actor.avgAge)}세</p>
+                    </div>
                 </div>
-            </div>
-            <div class="face-card-body">
-                <p><strong>총 등장 횟수:</strong> ${actor.totalAppearances}회</p>
-                <p><strong>주요 감정:</strong> ${emotions || '분석 정보 없음'}</p>
-                <p><strong>등장 타임라인:</strong></p>
-                <div class="timeline-container">${timelineMarkers}</div>
+                <div class="face-card-body">
+                    <p><strong>총 등장 횟수:</strong> ${actor.totalAppearances}회</p>
+                    <p><strong>주요 감정:</strong> ${emotions || '분석 정보 없음'}</p>
+                    <p><strong>등장 타임라인:</strong></p>
+                    <div class="timeline-container">${timelineMarkers}</div>
+                </div>
             </div>
         `;
         resultsContainer.appendChild(actorCard);
@@ -254,9 +256,26 @@ export async function startAnalysis() {
 
         const faceCanvas = document.createElement('canvas');
         const { x, y, width, height } = bestDetection.detection.box;
-        faceCanvas.width = width;
-        faceCanvas.height = height;
-        faceCanvas.getContext('2d').drawImage(videoEl, x, y, width, height, 0, 0, width, height);
+
+        // 여권 사진처럼 보이도록 박스 확장 (세로 비율을 더 늘림)
+        const widthScale = 1.5;
+        const heightScale = 2.0;
+        const newWidth = width * widthScale;
+        const newHeight = height * heightScale;
+
+        // 얼굴이 프레임의 상단 1/3 지점에 위치하도록 y 좌표 조정
+        let newX = x - (newWidth - width) / 2;
+        let newY = y - (newHeight - height) / 3;
+
+        // 비디오 프레임 경계를 벗어나지 않도록 좌표 보정
+        newX = Math.max(0, newX);
+        newY = Math.max(0, newY);
+        const finalWidth = Math.min(newWidth, videoEl.videoWidth - newX);
+        const finalHeight = Math.min(newHeight, videoEl.videoHeight - newY);
+
+        faceCanvas.width = finalWidth;
+        faceCanvas.height = finalHeight;
+        faceCanvas.getContext('2d').drawImage(videoEl, newX, newY, finalWidth, finalHeight, 0, 0, finalWidth, finalHeight);
 
         const gender = actor.detections.map(d => d.gender).sort((a,b) => actor.detections.filter(v => v.gender===a).length - actor.detections.filter(v => v.gender===b).length).pop();
         const avgAge = actor.detections.reduce((sum, d) => sum + d.age, 0) / actor.detections.length;

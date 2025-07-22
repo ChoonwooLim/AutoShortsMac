@@ -4350,11 +4350,22 @@
         .face-card.professional {
             flex-direction: column;
             gap: 0; /* 자식 요소 사이의 간격 제거 */
+            overflow: hidden; /* 카드를 벗어나는 이미지 숨김 */
         }
 
-        .face-card.professional:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+        .face-card.professional .face-card-img {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 3 / 4; /* 여권 사진 비율로 변경 */
+            object-fit: cover;
+            border-radius: 0; /* 이미지의 둥근 모서리 제거 */
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .face-card.professional .face-card-content {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
         }
 
         .face-card-header {
@@ -4367,11 +4378,7 @@
         }
 
         .face-card-header img {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--accent-color);
+            display: none; /* 기존 작은 썸네일 숨김 */
         }
 
         .face-card-title {
